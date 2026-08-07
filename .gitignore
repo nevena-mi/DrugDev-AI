@@ -1,0 +1,8 @@
+.env
+
+*.pdf
+*.m4a
+
+__pycache__/
+*.pyc
+

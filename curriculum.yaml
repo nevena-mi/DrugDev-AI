@@ -1,0 +1,110 @@
+curriculum:
+  - id: foundations
+    title: Introduction to Drug Development
+    description: Overview of the pharmaceutical industry, drug lifecycle and key terminology.
+    difficulty: beginner
+    duration: 2 hours
+    prerequisites: []
+    objectives:
+      - Understand the drug development lifecycle
+      - Recognize major stakeholders
+      - Learn basic terminology
+    documents:
+      - ema/ema_human_regulatory_overview.pdf
+      - fda/fda_drug_development_process.pdf
+    quiz: true
+
+  - id: regulatory
+    title: Regulatory Landscape
+    description: Introduction to EMA, FDA, ICH and WHO.
+    difficulty: beginner
+    duration: 2 hours
+    prerequisites:
+      - foundations
+    objectives:
+      - Understand the role of regulatory agencies
+      - Compare EMA and FDA
+      - Understand ICH harmonization
+    documents:
+      - ema/ema_human_regulatory_overview.pdf
+    quiz: true
+
+  - id: clinical_trials
+    title: Clinical Trials
+    description: Clinical trial phases, ethics and Good Clinical Practice.
+    difficulty: intermediate
+    duration: 4 hours
+    prerequisites:
+      - regulatory
+    objectives:
+      - Understand clinical trial phases
+      - Learn GCP principles
+      - Understand ethical requirements
+    documents:
+      - ich/ich_e6_r3.pdf
+      - ich/ich_e8_r1.pdf
+      - declaration_of_helsinki.pdf
+    quiz: true
+
+  - id: marketing_authorization
+    title: Marketing Authorization
+    description: Regulatory submission and approval process.
+    difficulty: intermediate
+    duration: 3 hours
+    prerequisites:
+      - clinical_trials
+    objectives:
+      - Understand submission pathways
+      - Learn the review process
+    documents:
+      - ema/ema_marketing_authorisation.pdf
+    quiz: true
+
+  - id: quality
+    title: Pharmaceutical Quality Systems
+    description: Quality management throughout the product lifecycle.
+    difficulty: intermediate
+    duration: 4 hours
+    prerequisites:
+      - marketing_authorization
+    objectives:
+      - Understand Quality Risk Management
+      - Learn Pharmaceutical Quality Systems
+      - Understand Pharmaceutical Development
+    documents:
+      - ich/ich_q8.pdf
+      - ich/ich_q9.pdf
+      - ich/ich_q10.pdf
+      - ich/ich_q12.pdf
+    quiz: true
+
+  - id: pharmacovigilance
+    title: Pharmacovigilance
+    description: Drug safety monitoring and risk management.
+    difficulty: advanced
+    duration: 4 hours
+    prerequisites:
+      - quality
+    objectives:
+      - Understand pharmacovigilance
+      - Learn signal detection
+      - Understand risk management
+    documents:
+      - gvp/gvp_module_i.pdf
+      - gvp/gvp_module_v.pdf
+      - gvp/gvp_module_vi.pdf
+    quiz: true
+
+  - id: emerging_topics
+    title: Emerging Topics
+    description: Artificial intelligence and future trends in healthcare.
+    difficulty: advanced
+    duration: 2 hours
+    prerequisites:
+      - pharmacovigilance
+    objectives:
+      - Understand AI applications in healthcare
+      - Learn ethical considerations
+    documents:
+      - who_ai_ethics.pdf
+    quiz: true
