@@ -1,6 +1,6 @@
 from pinecone import Pinecone, ServerlessSpec
 
-from config import (
+from src.config import (
     PINECONE_API_KEY,
     PINECONE_INDEX,
     PINECONE_CLOUD,

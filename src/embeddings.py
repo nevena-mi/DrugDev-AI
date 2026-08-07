@@ -1,4 +1,9 @@
-"""OpenAI embedding generation for ingested document chunks."""
+"""OpenAI embedding generation for ingested document chunks.
+
+It batches chunk texts, calls the existing OpenAI client with config.EMBEDDING_MODEL, 
+preserves each chunk-s metadata, and returns embedding records ready for the Pinecone phase.
+It logs batch start, success, and failure, and wraps API errors in the module-specific exception.
+"""
 
 from __future__ import annotations
 
@@ -6,8 +11,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Protocol, Sequence
 
-from config import EMBEDDING_MODEL
-from openai_client import client
+from src.config import EMBEDDING_MODEL
+from src.openai_client import client
 
 
 logger = logging.getLogger(__name__)

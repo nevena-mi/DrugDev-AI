@@ -1,3 +1,11 @@
+'''
+successful embedding generation
+vector dimensions
+metadata preservation
+wrapped API failures
+empty-input handling
+'''
+
 from __future__ import annotations
 
 from types import SimpleNamespace

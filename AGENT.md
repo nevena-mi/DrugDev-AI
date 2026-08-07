@@ -212,17 +212,6 @@ Do not continue development until the current module passes testing.
 
 ---
 
-# Git Workflow
-
-After each completed module:
-
-git add .
-git commit -m "<meaningful message>"
-git push origin main
-
-Keep commits small and focused.
-
----
 
 # Scope
 
