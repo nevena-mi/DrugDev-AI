@@ -90,7 +90,7 @@ Project structure established
 
 # Phase 2 — Document Ingestion
 
-Status: ⬜ Not Started
+Status: ✅ Completed
 
 ## Goal
 
@@ -133,7 +133,7 @@ Working ingestion pipeline
 
 # Phase 3 — Embeddings
 
-Status: ⬜
+Status: ✅ Completed
 
 ## Goal
 

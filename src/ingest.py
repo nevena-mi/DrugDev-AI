@@ -1,14 +1,5 @@
 """Document ingestion for PDF sources."""
 
-'''
-Recursively discovers PDFs under sources/ with pathlib.
-Loads each PDF with PyPDFLoader.
-Splits content with RecursiveCharacterTextSplitter.
-Returns chunked Document objects with metadata for filename, relative_file_path, source_organization, document_title, and chunk_id.
-Adds concise docstrings, type hints, and logging.
-Includes a small local fallback so the module remains importable in this workspace where LangChain is not installed.
-'''
-
 from __future__ import annotations
 
 import logging
