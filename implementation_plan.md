@@ -169,7 +169,7 @@ Embedding pipeline
 
 # Phase 4 — Pinecone Indexing
 
-Status: ⬜
+Status: ✅ Completed
 
 ## Goal
 
