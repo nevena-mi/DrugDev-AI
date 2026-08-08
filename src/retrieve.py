@@ -19,6 +19,7 @@ class RetrievedChunk:
 
     id: str
     score: float
+    text: str
     metadata: dict[str, Any]
 
 
@@ -58,6 +59,7 @@ def retrieve_chunks(
         RetrievedChunk(
             id=str(getattr(match, "id", "")),
             score=float(getattr(match, "score", 0.0) or 0.0),
+            text=str((getattr(match, "metadata", {}) or {}).get("text", "")),
             metadata=dict(getattr(match, "metadata", {}) or {}),
         )
         for match in ranked_matches
@@ -65,4 +67,3 @@ def retrieve_chunks(
 
     logger.info("Retrieved %d chunks for query %r", len(retrieved_chunks), query)
     return retrieved_chunks
-

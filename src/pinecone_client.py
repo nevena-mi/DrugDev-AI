@@ -140,10 +140,12 @@ def _build_vector_id(chunk: EmbeddedChunk) -> str:
 def _build_vector_record(chunk: EmbeddedChunk) -> PineconeVectorRecord:
     """Convert an embedded chunk into a Pinecone vector record."""
 
+    metadata = dict(chunk.metadata)
+    metadata["text"] = chunk.text
     return PineconeVectorRecord(
         id=_build_vector_id(chunk),
         values=list(chunk.embedding),
-        metadata=dict(chunk.metadata),
+        metadata=metadata,
     )
 
 

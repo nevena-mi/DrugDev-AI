@@ -225,7 +225,7 @@ Retriever
 
 # Phase 6 — LangGraph / RAG Generation
 
-Status: ⬜
+Status: ✅ Completed
 
 ## Goal
 

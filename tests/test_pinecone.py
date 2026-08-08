@@ -133,6 +133,7 @@ def test_upsert_embedded_chunks_builds_stable_ids_and_preserves_metadata() -> No
                 "source_organization": "ema",
                 "document_title": "example",
                 "chunk_id": "chunk-0",
+                "text": "example chunk",
             },
         ),
         (
@@ -144,6 +145,7 @@ def test_upsert_embedded_chunks_builds_stable_ids_and_preserves_metadata() -> No
                 "source_organization": "fda",
                 "document_title": "example",
                 "chunk_id": "fda/example.pdf::chunk-1",
+                "text": "example chunk",
             },
         ),
     ]
