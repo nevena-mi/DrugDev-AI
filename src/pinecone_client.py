@@ -107,7 +107,6 @@ def get_index():
 
         _index = pinecone_client.Index(
             host=index_model.host,
-            api_key=PINECONE_API_KEY,
         )
     except PineconeError as exc:  # pragma: no cover - network failures
         raise PineconeIndexingError(

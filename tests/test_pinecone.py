@@ -102,7 +102,7 @@ def test_get_index_resolves_lazily() -> None:
     assert result is fake_index
     fake_client.has_index.assert_called_once_with(TEST_INDEX_NAME)
     fake_client.describe_index.assert_called_once_with(TEST_INDEX_NAME)
-    fake_client.Index.assert_called_once_with(host="https://example-host", api_key="test-key")
+    fake_client.Index.assert_called_once_with(host="https://example-host")
 
 
 def test_upsert_embedded_chunks_builds_stable_ids_and_preserves_metadata() -> None:

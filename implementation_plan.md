@@ -301,7 +301,7 @@ Working Ask-mode RAG backend.
 
 # Phase 7 — Streamlit UI
 
-Status: ⬜
+Status: ✅ Completed
 
 ## Goal
 
