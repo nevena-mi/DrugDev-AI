@@ -55,28 +55,25 @@ def _render_placeholder(st: StreamlitLike, title: str) -> None:
 
 
 def _render_citation_block(st: StreamlitLike, citations: list[Any]) -> None:
-    """Render citation and source metadata for the current answer."""
+    """Render unique document titles for the current answer."""
 
     if not citations:
         st.info("No citations available for this answer.")
         return
 
     st.subheader("Citations")
+    seen_titles: set[str] = set()
+    rendered_titles: list[str] = []
+
     for index, citation in enumerate(citations, start=1):
         citation_data = _to_mapping(citation)
-        st.markdown(
-            "\n".join(
-                [
-                    f"**Citation {index}**",
-                    f"- ID: `{citation_data.get('id', '')}`",
-                    f"- File: `{citation_data.get('relative_file_path', '')}`",
-                    f"- Organization: `{citation_data.get('source_organization', '')}`",
-                    f"- Document title: `{citation_data.get('document_title', '')}`",
-                    f"- Chunk ID: `{citation_data.get('chunk_id', '')}`",
-                    f"- Similarity score: `{citation_data.get('score', 0.0):.4f}`",
-                ]
-            )
-        )
+        title = str(citation_data.get("document_title", "")).strip()
+        if not title or title in seen_titles:
+            continue
+
+        seen_titles.add(title)
+        rendered_titles.append(title)
+        st.markdown(f"**Citation {len(rendered_titles)}**: {title}")
 
 
 def _to_mapping(value: Any) -> dict[str, Any]:
@@ -89,30 +86,6 @@ def _to_mapping(value: Any) -> dict[str, Any]:
     if hasattr(value, "__dict__"):
         return dict(vars(value))
     return {"value": value}
-
-
-def _render_retrieved_sources(st: StreamlitLike, retrieved_chunks: list[Any]) -> None:
-    """Render the retrieved chunks that back the answer."""
-
-    if not retrieved_chunks:
-        return
-
-    st.subheader("Retrieved Sources")
-    for index, chunk in enumerate(retrieved_chunks, start=1):
-        metadata = chunk.metadata
-        st.markdown(
-            "\n".join(
-                [
-                    f"**Source {index}**",
-                    f"- ID: `{chunk.id}`",
-                    f"- File: `{metadata.get('relative_file_path', '')}`",
-                    f"- Organization: `{metadata.get('source_organization', '')}`",
-                    f"- Document title: `{metadata.get('document_title', '')}`",
-                    f"- Chunk ID: `{metadata.get('chunk_id', '')}`",
-                    f"- Similarity score: `{chunk.score:.4f}`",
-                ]
-            )
-        )
 
 
 def _render_ask_tab(st: StreamlitLike, ask_fn=ask_question) -> None:
@@ -146,7 +119,6 @@ def _render_ask_tab(st: StreamlitLike, ask_fn=ask_question) -> None:
     st.subheader("Answer")
     st.write(result.answer)
     _render_citation_block(st, list(result.citations))
-    _render_retrieved_sources(st, list(result.retrieved_chunks))
 
 
 def main(st: StreamlitLike | None = None, *, ask_fn=ask_question) -> None:

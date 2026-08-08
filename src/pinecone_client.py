@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 PINECONE_DIMENSION = 1536
 PINECONE_METRIC = "cosine"
+PINECONE_UPSERT_BATCH_SIZE = 100
 
 _pinecone_client: Pinecone | None = None
 _index = None
@@ -159,20 +160,49 @@ def upsert_embedded_chunks(
         return None
 
     pinecone_index = get_index()
-    vectors = [
-        (record.id, record.values, record.metadata)
-        for record in (_build_vector_record(chunk) for chunk in chunks)
-    ]
+    namespace_value = namespace or ""
+    total_chunks = len(chunks)
+    logger.info(
+        "Upserting %d vectors into Pinecone in batches of %d",
+        total_chunks,
+        PINECONE_UPSERT_BATCH_SIZE,
+    )
 
-    logger.info("Upserting %d vectors into Pinecone", len(vectors))
-    try:
-        return pinecone_index.upsert(
-            vectors=vectors,
-            namespace=namespace or "",
+    last_response: Any = None
+    batch: list[tuple[str, list[float], dict[str, Any]]] = []
+    batch_start = 0
+
+    for chunk_index, chunk in enumerate(chunks, start=1):
+        record = _build_vector_record(chunk)
+        batch.append((record.id, record.values, record.metadata))
+
+        if len(batch) < PINECONE_UPSERT_BATCH_SIZE and chunk_index < total_chunks:
+            continue
+
+        batch_number = (batch_start // PINECONE_UPSERT_BATCH_SIZE) + 1
+        logger.info(
+            "Upserting Pinecone batch %d (%d vectors of %d total)",
+            batch_number,
+            len(batch),
+            total_chunks,
         )
-    except PineconeError as exc:
-        logger.exception("Pinecone upsert failed")
-        raise PineconeIndexingError("Failed to upsert embedded chunks to Pinecone") from exc
+        try:
+            last_response = pinecone_index.upsert(
+                vectors=batch,
+                namespace=namespace_value,
+            )
+        except PineconeError as exc:
+            logger.exception("Pinecone upsert failed for batch %d", batch_number)
+            raise PineconeIndexingError(
+                "Failed to upsert embedded chunks to Pinecone"
+            ) from exc
+
+        logger.info("Completed Pinecone batch %d", batch_number)
+        batch = []
+        batch_start = chunk_index
+
+    logger.info("Finished upserting %d vectors into Pinecone", total_chunks)
+    return last_response
 
 
 def query_embedding(

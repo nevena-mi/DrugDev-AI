@@ -151,6 +151,50 @@ def test_upsert_embedded_chunks_builds_stable_ids_and_preserves_metadata() -> No
     ]
 
 
+def test_upsert_embedded_chunks_batches_large_inputs() -> None:
+    fake_index = Mock()
+    responses = [
+        SimpleNamespace(upserted_count=100),
+        SimpleNamespace(upserted_count=100),
+        SimpleNamespace(upserted_count=5),
+    ]
+    fake_index.upsert.side_effect = responses
+    chunks = [
+        _make_chunk(
+            relative_file_path="ema/example.pdf",
+            chunk_id=f"chunk-{index}",
+        )
+        for index in range(205)
+    ]
+
+    with patch.object(pinecone_client, "get_index", return_value=fake_index):
+        response = pinecone_client.upsert_embedded_chunks(chunks, namespace="phase4")
+
+    assert response is responses[-1]
+    assert fake_index.upsert.call_count == 3
+
+    first_call = fake_index.upsert.call_args_list[0].kwargs
+    second_call = fake_index.upsert.call_args_list[1].kwargs
+    third_call = fake_index.upsert.call_args_list[2].kwargs
+
+    assert first_call["namespace"] == "phase4"
+    assert second_call["namespace"] == "phase4"
+    assert third_call["namespace"] == "phase4"
+
+    assert len(first_call["vectors"]) == pinecone_client.PINECONE_UPSERT_BATCH_SIZE
+    assert len(second_call["vectors"]) == pinecone_client.PINECONE_UPSERT_BATCH_SIZE
+    assert len(third_call["vectors"]) == 5
+
+    assert first_call["vectors"][0][0] == "ema/example.pdf::chunk-0"
+    assert first_call["vectors"][-1][0] == "ema/example.pdf::chunk-99"
+    assert second_call["vectors"][0][0] == "ema/example.pdf::chunk-100"
+    assert second_call["vectors"][-1][0] == "ema/example.pdf::chunk-199"
+    assert third_call["vectors"][0][0] == "ema/example.pdf::chunk-200"
+    assert first_call["vectors"][0][2]["chunk_id"] == "chunk-0"
+    assert second_call["vectors"][0][2]["chunk_id"] == "chunk-100"
+    assert third_call["vectors"][0][2]["chunk_id"] == "chunk-200"
+
+
 def test_query_embedding_uses_metadata() -> None:
     fake_index = Mock()
     fake_index.query.return_value = SimpleNamespace(

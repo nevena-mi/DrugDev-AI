@@ -83,7 +83,16 @@ def test_main_renders_ask_and_placeholders() -> None:
                 document_title="example",
                 chunk_id="ema/example.pdf::chunk-0",
                 score=0.91,
-            )
+            ),
+            SimpleNamespace(
+                id="ema/example.pdf::chunk-1",
+                filename="example.pdf",
+                relative_file_path="ema/example.pdf",
+                source_organization="ema",
+                document_title="example",
+                chunk_id="ema/example.pdf::chunk-1",
+                score=0.84,
+            ),
         ],
         retrieved_chunks=[
             SimpleNamespace(
@@ -115,9 +124,24 @@ def test_main_renders_ask_and_placeholders() -> None:
     assert len(ask_calls) == 1
     assert ("subheader", "Answer") in fake_streamlit.calls
     assert ("subheader", "Citations") in fake_streamlit.calls
-    assert ("subheader", "Retrieved Sources") in fake_streamlit.calls
     assert ("write", "Grounded answer") in fake_streamlit.calls
-    assert any(call[0] == "markdown" and "Citation 1" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "**Citation 1**: example" in call[1] for call in fake_streamlit.calls)
+    assert sum(1 for call in fake_streamlit.calls if call[0] == "markdown" and "example" in call[1]) == 1
+    assert not any(
+        call[0] == "markdown"
+        and any(
+            token in call[1]
+            for token in [
+                "ID:",
+                "File:",
+                "Organization:",
+                "Chunk ID:",
+                "Similarity score:",
+                "Retrieved Sources",
+            ]
+        )
+        for call in fake_streamlit.calls
+    )
     assert sum(1 for call in fake_streamlit.calls if call[0] == "info" and "later phase" in call[1].lower()) == 2
 
 
