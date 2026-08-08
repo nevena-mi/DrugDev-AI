@@ -38,6 +38,27 @@ class EmbeddingGenerationError(RuntimeError):
     """Raised when embedding generation fails."""
 
 
+def _embed_texts(texts: Sequence[str]) -> list[list[float]]:
+    """Embed one or more texts using the configured OpenAI model."""
+
+    if not texts:
+        return []
+
+    try:
+        response = client.embeddings.create(
+            model=EMBEDDING_MODEL,
+            input=list(texts),
+        )
+    except Exception as exc:  # pragma: no cover - exercised via failure test
+        logger.exception("Embedding generation failed")
+        raise EmbeddingGenerationError("Failed to generate embeddings") from exc
+
+    if len(response.data) != len(texts):  # pragma: no cover - defensive guard
+        raise EmbeddingGenerationError("Embedding API returned a mismatched number of vectors")
+
+    return [list(embedding_item.embedding) for embedding_item in response.data]
+
+
 def _iter_batches(
     documents: Sequence[EmbeddableDocument],
     batch_size: int,
@@ -69,30 +90,26 @@ def generate_embeddings(
             EMBEDDING_MODEL,
         )
 
-        try:
-            response = client.embeddings.create(
-                model=EMBEDDING_MODEL,
-                input=batch_texts,
-            )
-        except Exception as exc:  # pragma: no cover - exercised via failure test
-            logger.exception("Embedding generation failed for batch %d", batch_number)
-            raise EmbeddingGenerationError(
-                f"Failed to generate embeddings for batch {batch_number}"
-            ) from exc
-
-        if len(response.data) != len(batch):  # pragma: no cover - defensive guard
-            raise EmbeddingGenerationError(
-                "Embedding API returned a mismatched number of vectors"
-            )
-
-        for document, embedding_item in zip(batch, response.data, strict=True):
+        embeddings = _embed_texts(batch_texts)
+        for document, embedding in zip(batch, embeddings, strict=True):
             embedded_chunks.append(
                 EmbeddedChunk(
                     text=document.page_content,
-                    embedding=list(embedding_item.embedding),
+                    embedding=embedding,
                     metadata=dict(document.metadata),
                 )
             )
 
     logger.info("Generated embeddings for %d document chunks", len(embedded_chunks))
     return embedded_chunks
+
+
+def embed_query(query: str) -> list[float]:
+    """Generate a single embedding vector for a retrieval query."""
+
+    cleaned_query = query.strip()
+    if not cleaned_query:
+        raise EmbeddingGenerationError("Query text must not be empty")
+
+    embeddings = _embed_texts([cleaned_query])
+    return embeddings[0]
