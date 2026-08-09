@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from functools import lru_cache
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable
@@ -89,6 +90,94 @@ except ImportError:  # pragma: no cover - local workspace fallback
 
 
 logger = logging.getLogger(__name__)
+DOCUMENTS_METADATA_PATH = Path(__file__).resolve().parents[1] / "documents.yaml"
+
+try:  # pragma: no cover - exercised when PyYAML is available
+    import yaml
+except ImportError:  # pragma: no cover - local workspace fallback
+    yaml = None
+
+
+def _default_document_metadata(relative_file_path: str) -> dict[str, str]:
+    """Return fallback metadata derived from the file path."""
+
+    path = Path(relative_file_path)
+    return {
+        "title": path.stem,
+        "organization": path.parts[0] if path.parts else "",
+    }
+
+
+def _normalise_metadata_entry(entry: Any, relative_file_path: str) -> dict[str, str]:
+    """Return a normalised metadata entry with safe fallbacks."""
+
+    defaults = _default_document_metadata(relative_file_path)
+    if not isinstance(entry, dict):
+        return defaults
+
+    title = entry.get("title") or defaults["title"]
+    organization = entry.get("organization") or defaults["organization"]
+    return {
+        "title": str(title),
+        "organization": str(organization),
+    }
+
+
+def _parse_simple_documents_metadata(text: str) -> dict[str, dict[str, str]]:
+    """Parse a restricted documents.yaml structure without PyYAML."""
+
+    metadata: dict[str, dict[str, str]] = {}
+    current_key: str | None = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.rstrip()
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        if not line.startswith(" ") and stripped.endswith(":"):
+            current_key = stripped[:-1].strip()
+            metadata[current_key] = {}
+            continue
+
+        if current_key is None:
+            continue
+
+        if ":" not in stripped:
+            continue
+
+        key, value = stripped.split(":", 1)
+        metadata[current_key][key.strip()] = value.strip().strip("'\"")
+
+    return {
+        key: _normalise_metadata_entry(value, key)
+        for key, value in metadata.items()
+    }
+
+
+@lru_cache(maxsize=None)
+def load_documents_metadata(metadata_path: Path = DOCUMENTS_METADATA_PATH) -> dict[str, dict[str, str]]:
+    """Load document metadata keyed by relative PDF path."""
+
+    if not metadata_path.exists():
+        logger.info("Documents metadata file not found: %s", metadata_path)
+        return {}
+
+    raw_text = metadata_path.read_text(encoding="utf-8")
+    if yaml is not None:
+        loaded = yaml.safe_load(raw_text) or {}
+        if not isinstance(loaded, dict):
+            raise ValueError(f"Invalid documents metadata structure: {metadata_path}")
+        return {
+            str(relative_file_path): _normalise_metadata_entry(entry, str(relative_file_path))
+            for relative_file_path, entry in loaded.items()
+        }
+
+    logger.warning(
+        "PyYAML is not installed; using a minimal documents metadata parser for %s",
+        metadata_path,
+    )
+    return _parse_simple_documents_metadata(raw_text)
 
 
 def discover_pdfs(source_root: Path) -> list[Path]:
@@ -124,6 +213,7 @@ def ingest_documents(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
     )
+    document_metadata = load_documents_metadata(DOCUMENTS_METADATA_PATH)
 
     for pdf_path in discover_pdfs(source_root):
         logger.info("Loading PDF: %s", pdf_path)
@@ -132,7 +222,13 @@ def ingest_documents(
 
         chunk_documents = splitter.split_documents(page_documents)
         relative_path = pdf_path.relative_to(source_root)
-        source_organization = relative_path.parts[0] if relative_path.parts else ""
+        relative_file_path = relative_path.as_posix()
+        metadata_entry = document_metadata.get(relative_file_path, {})
+        fallback_metadata = _default_document_metadata(relative_file_path)
+        document_title = metadata_entry.get("title") or fallback_metadata["title"]
+        source_organization = (
+            metadata_entry.get("organization") or fallback_metadata["organization"]
+        )
 
         logger.debug(
             "Split %s into %d chunks",
@@ -144,10 +240,10 @@ def ingest_documents(
             metadata.update(
                 {
                     "filename": pdf_path.name,
-                    "relative_file_path": relative_path.as_posix(),
+                    "relative_file_path": relative_file_path,
                     "source_organization": source_organization,
-                    "document_title": pdf_path.stem,
-                    "chunk_id": f"{relative_path.as_posix()}::chunk-{chunk_index}",
+                    "document_title": document_title,
+                    "chunk_id": f"{relative_file_path}::chunk-{chunk_index}",
                 }
             )
             documents.append(

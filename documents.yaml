@@ -1,0 +1,42 @@
+ema/ema_human_regulatory_overview.pdf:
+  title: "EMA Human Regulatory Overview"
+  organization: "EMA"
+ema/ema_marketing_authorisation.pdf:
+  title: "EMA Marketing Authorisation"
+  organization: "EMA"
+fda/fda_drug_development_process.pdf:
+  title: "FDA Drug Development and Approval Process"
+  organization: "FDA"
+gvp/gvp_module_i.pdf:
+  title: "Good Pharmacovigilance Practices Module I"
+  organization: "GVP"
+gvp/gvp_module_v.pdf:
+  title: "Good Pharmacovigilance Practices Module V"
+  organization: "GVP"
+gvp/gvp_module_vi.pdf:
+  title: "Good Pharmacovigilance Practices Module VI"
+  organization: "GVP"
+ich/ich_e6_r3.pdf:
+  title: "ICH E6(R3) Guideline for Good Clinical Practice"
+  organization: "ICH"
+ich/ich_e8_r1.pdf:
+  title: "ICH E8(R1) General Considerations for Clinical Studies"
+  organization: "ICH"
+ich/ich_q10.pdf:
+  title: "ICH Q10 Pharmaceutical Quality System"
+  organization: "ICH"
+ich/ich_q12.pdf:
+  title: "ICH Q12 Technical and Regulatory Considerations for Pharmaceutical Product Lifecycle Management"
+  organization: "ICH"
+ich/ich_q8.pdf:
+  title: "ICH Q8 Pharmaceutical Development"
+  organization: "ICH"
+ich/ich_q9.pdf:
+  title: "ICH Q9 Quality Risk Management"
+  organization: "ICH"
+who/who_ai_ethics.pdf:
+  title: "Ethics and Governance of Artificial Intelligence for Health"
+  organization: "WHO"
+wma/declaration_of_helsinki.pdf:
+  title: "WMA Declaration of Helsinki"
+  organization: "WMA"
