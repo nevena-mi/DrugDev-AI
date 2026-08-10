@@ -1,11 +1,56 @@
+ema/ema_ai_workplan.pdf:
+  title: "Artificial Intelligence Workplan to Guide the Use of AI in Medicines Regulation"
+  organization: "EMA"
+ema/ema_eu_guidelines.pdf:
+  title: "EMA EU Guidelines"
+  organization: "EMA"
 ema/ema_human_regulatory_overview.pdf:
   title: "EMA Human Regulatory Overview"
   organization: "EMA"
 ema/ema_marketing_authorisation.pdf:
   title: "EMA Marketing Authorisation"
   organization: "EMA"
+ema/ema_prime.pdf:
+  title: "Priority Medicines (PRIME)"
+  organization: "EMA"
+ema/ema_regulatory_network_strategy.pdf:
+  title: "European Medicines Regulatory Network Strategy"
+  organization: "EMA"
+ema/ema_scientific_guidelines.pdf:
+  title: "EMA Scientific Guidelines Overview"
+  organization: "EMA"
+eu/eu_ai_act_healthcare.pdf:
+  title: "Regulation (EU) 2024/1689 Artificial Intelligence Act"
+  organization: "EU"
+eu/eu_clinical_trials_regulation_536_2014.pdf:
+  title: "Regulation (EU) No 536/2014 on Clinical Trials"
+  organization: "EU"
+eu/eu_directive_2001_83_ec.pdf:
+  title: "Directive 2001/83/EC on the Community Code Relating to Medicinal Products for Human Use"
+  organization: "EU"
+eu/eu_gdpr_health_data.pdf:
+  title: "GDPR (Regulation (EU) 2016/679) - Health Data Provisions"
+  organization: "EU"
+eu/eu_regulation_726_2004.pdf:
+  title: "Regulation (EC) No 726/2004"
+  organization: "EU"
+fda/fda_ai_ml_medical_devices.pdf:
+  title: "Artificial Intelligence-Enabled Device Software Functions: Lifecycle Management and Marketing Submission Recommendations"
+  organization: "FDA"
+fda/fda_benefit_risk_assessment.pdf:
+  title: "Benefit-Risk Assessment for New Drug and Biological Product Applications"
+  organization: "FDA"
 fda/fda_drug_development_process.pdf:
   title: "FDA Drug Development and Approval Process"
+  organization: "FDA"
+fda/fda_ind_application.pdf:
+  title: "Investigational New Drug (IND) Application"
+  organization: "FDA"
+fda/fda_nda_application.pdf:
+  title: "New Drug Application (NDA)"
+  organization: "FDA"
+fda/fda_real_world_evidence.pdf:
+  title: "Framework for FDA's Real-World Evidence Program"
   organization: "FDA"
 gvp/gvp_module_i.pdf:
   title: "Good Pharmacovigilance Practices Module I"
@@ -16,17 +61,32 @@ gvp/gvp_module_v.pdf:
 gvp/gvp_module_vi.pdf:
   title: "Good Pharmacovigilance Practices Module VI"
   organization: "GVP"
+ich/ich_e2e.pdf:
+  title: "ICH E2E Pharmacovigilance Planning"
+  organization: "ICH"
+ich/ich_e3.pdf:
+  title: "ICH E3 Structure and Content of Clinical Study Reports"
+  organization: "ICH"
 ich/ich_e6_r3.pdf:
   title: "ICH E6(R3) Guideline for Good Clinical Practice"
   organization: "ICH"
 ich/ich_e8_r1.pdf:
   title: "ICH E8(R1) General Considerations for Clinical Studies"
   organization: "ICH"
+ich/ich_m4_ctd.pdf:
+  title: "ICH M4 Common Technical Document"
+  organization: "ICH"
 ich/ich_q10.pdf:
   title: "ICH Q10 Pharmaceutical Quality System"
   organization: "ICH"
+ich/ich_q11.pdf:
+  title: "ICH Q11 Development and Manufacture of Drug Substances"
+  organization: "ICH"
 ich/ich_q12.pdf:
   title: "ICH Q12 Technical and Regulatory Considerations for Pharmaceutical Product Lifecycle Management"
+  organization: "ICH"
+ich/ich_q13.pdf:
+  title: "ICH Q13 Continuous Manufacturing of Drug Substances and Drug Products"
   organization: "ICH"
 ich/ich_q8.pdf:
   title: "ICH Q8 Pharmaceutical Development"
@@ -36,6 +96,15 @@ ich/ich_q9.pdf:
   organization: "ICH"
 who/who_ai_ethics.pdf:
   title: "Ethics and Governance of Artificial Intelligence for Health"
+  organization: "WHO"
+who/who_gclp.pdf:
+  title: "Good Clinical Laboratory Practice (GCLP)"
+  organization: "WHO"
+who/who_gmp.pdf:
+  title: "WHO Good Manufacturing Practices for Pharmaceutical Products"
+  organization: "WHO"
+who/who_pharmacovigilance_guidance.pdf:
+  title: "The Importance of Pharmacovigilance: Safety Monitoring of Medicinal Products"
   organization: "WHO"
 wma/declaration_of_helsinki.pdf:
   title: "WMA Declaration of Helsinki"
