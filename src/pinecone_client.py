@@ -209,18 +209,22 @@ def query_embedding(
     vector: Sequence[float],
     top_k: int = 1,
     namespace: str | None = None,
+    metadata_filter: dict[str, Any] | None = None,
 ) -> Any:
     """Query Pinecone with an embedding vector for verification."""
 
     pinecone_index = get_index()
+    query_kwargs: dict[str, Any] = {
+        "vector": list(vector),
+        "top_k": top_k,
+        "namespace": namespace or "",
+        "include_values": False,
+        "include_metadata": True,
+    }
+    if metadata_filter is not None:
+        query_kwargs["filter"] = metadata_filter
     try:
-        return pinecone_index.query(
-            vector=list(vector),
-            top_k=top_k,
-            namespace=namespace or "",
-            include_values=False,
-            include_metadata=True,
-        )
+        return pinecone_index.query(**query_kwargs)
     except PineconeError as exc:
         logger.exception("Pinecone query failed")
         raise PineconeIndexingError("Failed to query Pinecone") from exc

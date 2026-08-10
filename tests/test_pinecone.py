@@ -214,6 +214,25 @@ def test_query_embedding_uses_metadata() -> None:
     assert kwargs["include_metadata"] is True
 
 
+def test_query_embedding_applies_metadata_filter() -> None:
+    fake_index = Mock()
+    fake_index.query.return_value = SimpleNamespace(matches=[])
+
+    metadata_filter = {"relative_file_path": {"$in": ["ich/ich_e6_r3.pdf"]}}
+
+    with patch.object(pinecone_client, "get_index", return_value=fake_index):
+        pinecone_client.query_embedding(
+            [0.1, 0.2, 0.3],
+            top_k=2,
+            namespace="phase4",
+            metadata_filter=metadata_filter,
+        )
+
+    kwargs = fake_index.query.call_args.kwargs
+    assert kwargs["filter"] == metadata_filter
+    assert kwargs["namespace"] == "phase4"
+
+
 def test_upsert_and_query_wrap_pinecone_errors() -> None:
     fake_index = Mock()
     fake_index.upsert.side_effect = PineconeError("boom")

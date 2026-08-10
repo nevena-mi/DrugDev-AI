@@ -37,12 +37,26 @@ def retrieve_chunks(
     *,
     top_k: int = 5,
     namespace: str | None = None,
+    document_paths: Sequence[str] | None = None,
 ) -> list[RetrievedChunk]:
     """Embed a natural-language query and return the most relevant chunks."""
 
     logger.info("Retrieving chunks for query %r", query)
     vector = embed_query(query)
-    response = query_embedding(vector, top_k=top_k, namespace=namespace)
+    metadata_filter = None
+    if document_paths is not None:
+        filtered_paths = [path for path in document_paths if path]
+        if not filtered_paths:
+            logger.info("Document-path filter resolved to no usable paths for query %r", query)
+            return []
+        metadata_filter = {"relative_file_path": {"$in": filtered_paths}}
+
+    response = query_embedding(
+        vector,
+        top_k=top_k,
+        namespace=namespace,
+        metadata_filter=metadata_filter,
+    )
 
     matches = _extract_matches(response)
     if not matches:

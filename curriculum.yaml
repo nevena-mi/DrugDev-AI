@@ -43,7 +43,7 @@ curriculum:
     documents:
       - ich/ich_e6_r3.pdf
       - ich/ich_e8_r1.pdf
-      - declaration_of_helsinki.pdf
+      - wma/declaration_of_helsinki.pdf
     quiz: true
 
   - id: marketing_authorization
@@ -106,5 +106,5 @@ curriculum:
       - Understand AI applications in healthcare
       - Learn ethical considerations
     documents:
-      - who_ai_ethics.pdf
+      - who/who_ai_ethics.pdf
     quiz: true

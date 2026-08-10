@@ -479,6 +479,8 @@ Documented semantic-retrieval baseline and reranking decision.
 
 Status: ⬜ Conditional
 
+Retrieval baseline established; reranking decision deferred until corpus expansion and Learn-mode evaluation.
+
 ## Prerequisite
 
 Phase 9 must demonstrate that semantic retrieval alone is insufficient.
@@ -538,78 +540,9 @@ If justified, a tested independent reranking module and documented before/after 
 
 ---
 
-# Phase 10 — Monitor Mode
 
-Status: ⬜
 
-## Goal
-
-Implement regulatory intelligence functionality using the existing RAG infrastructure.
-
-For the MVP, Monitor mode is manually triggered.
-
-Automated scheduled monitoring is a future extension.
-
-## Module
-
-src/monitor.py
-
-## Initial Scope
-
-Allow the user to inspect regulatory updates already available to the system and request summaries or explanations.
-
-The workflow should reuse:
-
-* embeddings
-* Pinecone
-* retrieval
-* LangGraph generation
-* citations
-
-## Flow
-
-Regulatory update / document
-↓
-Retrieve relevant content
-↓
-Summarize
-↓
-Explain significance
-↓
-Return citations
-
-## Future Extension
-
-n8n may later:
-
-* check EMA/FDA sources on a schedule
-* detect new documents
-* trigger ingestion
-* trigger summaries
-* send notifications
-
-## Test
-
-tests/test_monitor.py
-
-Verify:
-
-* update content can be retrieved
-* summaries are grounded
-* source citations are preserved
-* missing information is handled safely
-
-## Streamlit
-
-Replace the Monitor placeholder with the working Monitor interface.
-
-## Deliverable
-
-Working manual Monitor mode.
-
----
-
-# Phase 11 — Learn Mode
+# Phase 10 — Learn Mode
 
 Status: ⬜
 
@@ -726,6 +659,76 @@ Replace the Learn placeholder with:
 ## Deliverable
 
 Working Learn mode.
+
+---
+# Phase 11 — Monitor Mode
+
+Status: ⬜
+
+## Goal
+
+Implement regulatory intelligence functionality using the existing RAG infrastructure.
+
+For the MVP, Monitor mode is manually triggered.
+
+Automated scheduled monitoring is a future extension.
+
+## Module
+
+src/monitor.py
+
+## Initial Scope
+
+Allow the user to inspect regulatory updates already available to the system and request summaries or explanations.
+
+The workflow should reuse:
+
+* embeddings
+* Pinecone
+* retrieval
+* LangGraph generation
+* citations
+
+## Flow
+
+Regulatory update / document
+↓
+Retrieve relevant content
+↓
+Summarize
+↓
+Explain significance
+↓
+Return citations
+
+## Future Extension
+
+n8n may later:
+
+* check EMA/FDA sources on a schedule
+* detect new documents
+* trigger ingestion
+* trigger summaries
+* send notifications
+
+## Test
+
+tests/test_monitor.py
+
+Verify:
+
+* update content can be retrieved
+* summaries are grounded
+* source citations are preserved
+* missing information is handled safely
+
+## Streamlit
+
+Replace the Monitor placeholder with the working Monitor interface.
+
+## Deliverable
+
+Working manual Monitor mode.
 
 ---
 

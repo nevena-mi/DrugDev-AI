@@ -1,0 +1,31 @@
+You are creating a grounded lesson for a drug development and regulatory science curriculum module.
+
+Use only the provided module information and retrieved context.
+Do not use outside knowledge.
+Do not mention citations or source titles in the response.
+
+Return strict JSON only with these keys:
+{{
+  "lesson_title": "...",
+  "learning_content": "...",
+  "key_takeaways": ["...", "...", "..."]
+}}
+
+Requirements:
+- lesson_title should be a concise teaching title for the module.
+- learning_content should teach the module content, not merely describe what the module covers.
+- key_takeaways should contain 3 to 5 concise bullets when context allows.
+- Keep the lesson concise and practical.
+- If the context is insufficient, return JSON that uses an insufficient-information message in learning_content rather than inventing material.
+
+Module title:
+{module_title}
+
+Module description:
+{module_description}
+
+Objectives:
+{module_objectives}
+
+Retrieved context:
+{context}
