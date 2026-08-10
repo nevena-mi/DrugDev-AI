@@ -115,7 +115,7 @@ def test_lesson_generation_uses_active_module_documents_and_context() -> None:
         assert objective in captured["prompt"]
     assert retrieved_chunks[0].text in captured["prompt"]
     assert retrieved_chunks[1].text in captured["prompt"]
-    assert "Return strict JSON only" in captured["prompt"]
+    assert "return strict json only" in captured["prompt"].lower()
     assert "lesson_title" in captured["prompt"]
 
 

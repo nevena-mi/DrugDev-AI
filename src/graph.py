@@ -626,6 +626,7 @@ def generate_learning_quiz(
     *,
     top_k: int = 5,
     namespace: str | None = None,
+    lesson: LearningLesson | None = None,
 ) -> LearningQuizBundle:
     """Generate a short quiz for a curriculum module."""
 
@@ -644,7 +645,13 @@ def generate_learning_quiz(
         document_paths=module.documents,
         allow_fallback=True,
     )
-    quiz = generate_quiz(module, retrieved_chunks)
+    quiz = generate_quiz(
+        module,
+        retrieved_chunks,
+        lesson_title=lesson.lesson_title if lesson is not None else None,
+        lesson_content=lesson.learning_content if lesson is not None else None,
+        lesson_takeaways=lesson.key_takeaways if lesson is not None else None,
+    )
     return LearningQuizBundle(
         module_id=module.id,
         module_title=module.title,

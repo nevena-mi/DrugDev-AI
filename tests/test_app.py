@@ -125,6 +125,7 @@ def test_main_starts_learning_session_from_onboarding() -> None:
         completed_module_ids=[],
         quiz_result=None,
         current_quiz=None,
+        current_lesson=None,
     )
     modules = [
         SimpleNamespace(
@@ -182,6 +183,7 @@ def test_main_routes_learn_interactions_to_backend() -> None:
         completed_module_ids=[],
         quiz_result=None,
         current_quiz=None,
+        current_lesson=None,
     )
     fake_quiz_bundle = SimpleNamespace(
         module_id="foundations",
@@ -212,10 +214,14 @@ def test_main_routes_learn_interactions_to_backend() -> None:
     )
     fake_quiz_result = SimpleNamespace(
         module_id="foundations",
-        score=0.67,
-        passed=True,
-        feedback="Good work.",
-        question_feedback=["q1 ok", "q2 ok"],
+        number_correct=2,
+        total_questions=5,
+        percentage=40.0,
+        passed=False,
+        question_feedback=[
+            SimpleNamespace(id="q1", correct=True, explanation="Good Clinical Practice is a standard for trials."),
+            SimpleNamespace(id="q2", correct=False, explanation="The answer missed the application."),
+        ],
     )
     fake_answer = SimpleNamespace(
         module_id="foundations",
@@ -266,7 +272,7 @@ def test_main_routes_learn_interactions_to_backend() -> None:
     assert ensure_lesson.call_count == 1
     assert generate_quiz.call_count == 1
     assert evaluate_quiz.call_count == 1
-    assert complete_module.call_count == 1
+    assert complete_module.call_count == 0
     assert fake_session.quiz_result is fake_quiz_result
     assert any(call[0] == "subheader" and call[1] == "Learning Content" for call in fake_streamlit.calls)
     assert any(call[0] == "write" and call[1] == "Grounded lesson content." for call in fake_streamlit.calls)
@@ -281,7 +287,10 @@ def test_main_routes_learn_interactions_to_backend() -> None:
     assert not any("Retrieved Sources" in str(call[1]) for call in fake_streamlit.calls if call[0] == "subheader")
     assert any(call[0] == "subheader" and call[1] == "Question Answer" for call in fake_streamlit.calls)
     assert any(call[0] == "subheader" and call[1] == "Quiz Result" for call in fake_streamlit.calls)
-    assert any(call[0] == "success" and "Advanced to Regulatory Landscape" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "Score: 2/5 (40%)" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "Needs review" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "**Q1 — Correct**" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "Good Clinical Practice is a standard for trials." in call[1] for call in fake_streamlit.calls)
 
 
 def test_main_handles_backend_errors_gracefully() -> None:

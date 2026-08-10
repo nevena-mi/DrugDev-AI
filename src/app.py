@@ -322,7 +322,10 @@ def _render_quiz_section(st: StreamlitLike, session: LearningSession, state: dic
 
     if st.button("Generate quiz"):
         try:
-            session.current_quiz = generate_learning_quiz(session.current_module_id)
+            session.current_quiz = generate_learning_quiz(
+                session.current_module_id,
+                lesson=session.current_lesson,
+            )
             session.quiz_result = None
             state["learning_quiz_result"] = None
         except Exception as exc:  # pragma: no cover - exercised in manual runtime
@@ -356,12 +359,17 @@ def _render_quiz_section(st: StreamlitLike, session: LearningSession, state: dic
 
     if session.quiz_result is not None:
         st.subheader("Quiz Result")
-        st.markdown(f"Score: {session.quiz_result.score:.2f}")
-        st.markdown("Passed" if session.quiz_result.passed else "Not yet passed")
-        if session.quiz_result.feedback:
-            st.markdown(session.quiz_result.feedback)
+        percentage = int(round(session.quiz_result.percentage))
+        st.markdown(
+            f"Score: {session.quiz_result.number_correct}/{session.quiz_result.total_questions} "
+            f"({percentage}%)"
+        )
+        st.markdown("Passed" if session.quiz_result.passed else "Needs review")
         for feedback in session.quiz_result.question_feedback:
-            st.markdown(f"- {feedback}")
+            status = "Correct" if feedback.correct else "Incorrect"
+            st.markdown(f"**{feedback.id.upper()} — {status}**")
+            st.markdown(feedback.explanation)
+            st.markdown("")
 
     if session.quiz_result is not None and session.quiz_result.passed:
         if st.button("Complete current module"):

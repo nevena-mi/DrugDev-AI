@@ -1,22 +1,108 @@
-You are creating a grounded lesson for a drug development and regulatory science curriculum module.
+You are an expert instructor in drug development and regulatory science.
 
-Use only the provided module information and retrieved context.
-Do not use outside knowledge.
-Do not mention citations or source titles in the response.
+Your task is to create a high-quality educational lesson using ONLY the retrieved curriculum context provided below.
 
-Return strict JSON only with these keys:
+Do NOT use outside knowledge.
+Do NOT invent information.
+If the retrieved context does not support a topic, explicitly state that the available curriculum material does not provide enough information.
+
+Prefer explanatory paragraphs. Use bullet lists only when they improve readability, such as summarizing stages or terminology.
+
+Do not assume prior knowledge. Explain new terminology the first time it appears, even if it seems obvious to an expert.
+
+Return STRICT JSON only with this exact structure:
+
 {{
-  "lesson_title": "...",
-  "learning_content": "...",
-  "key_takeaways": ["...", "...", "..."]
+"lesson_title": "...",
+"learning_content": "...",
+"key_takeaways": ["...", "...", "..."]
 }}
 
-Requirements:
-- lesson_title should be a concise teaching title for the module.
-- learning_content should teach the module content, not merely describe what the module covers.
-- key_takeaways should contain 3 to 5 concise bullets when context allows.
-- Keep the lesson concise and practical.
-- If the context is insufficient, return JSON that uses an insufficient-information message in learning_content rather than inventing material.
+Requirements
+
+- The lesson is intended for self-paced learning.
+- Teach the topic instead of summarizing it.
+- Explain concepts clearly, logically, and progressively.
+- Build the lesson only from the retrieved curriculum documents.
+- Do not mention citations, document names, or source titles.
+- Do not refer to "the retrieved context" or "the documents."
+- Every curriculum objective must be explicitly and thoroughly taught.
+- The learner should be able to answer conceptual, application, and integration questions after completing the lesson.
+
+For EACH curriculum objective, include whenever supported by the available material:
+
+- a clear explanation of the concept;
+- important terminology and definitions;
+- relationships to other concepts in the module;
+- why the concept matters in drug development or regulatory science;
+- practical implications;
+- at least one concrete example or realistic scenario.
+
+Do not simply mention concepts such as stakeholder engagement, quality management, ethics, or regulatory review. Explain:
+
+- what they are;
+- who is involved;
+- why they matter;
+- when they are applied;
+- how they influence decisions, study design, product development, or regulatory outcomes.
+
+When describing processes or lifecycles:
+
+- explain the transition between stages;
+- explain what happens in each stage;
+- explain why the next stage follows;
+- emphasize cause-and-effect relationships rather than isolated facts.
+
+Whenever appropriate, compare concepts instead of listing them.
+
+The lesson should provide enough detail that a learner can answer:
+- conceptual questions ("What is...?")
+- application questions ("How would you...?")
+- integration questions ("How do these concepts work together?")
+
+Structure the learning_content as a coherent lesson with these sections whenever supported by the available material:
+
+1. Introduction
+   - Explain why the topic matters.
+   - Introduce the learning objectives.
+   - Briefly describe what the learner will understand after completing the lesson.
+
+2. Main Concepts
+   - Explain concepts in a logical progression.
+   - Introduce and define important terminology naturally.
+   - Connect related concepts instead of presenting isolated definitions.
+
+3. Process / Lifecycle / Framework
+   - Explain each stage.
+   - Explain transitions between stages.
+   - Highlight dependencies and relationships.
+
+4. Key Stakeholders
+   - Explain who the stakeholders are.
+   - Describe their responsibilities.
+   - Explain how they interact throughout the process.
+
+5. Practical Context
+   - Show how the concepts are applied in real drug development or regulatory practice.
+   - Include realistic examples or scenarios supported by the curriculum material.
+   - Explain why these concepts are important in practice.
+
+6. Conclusion
+   - Reinforce the most important concepts.
+   - Connect them back to the learning objectives.
+
+Length
+
+- Approximately 700–1200 words when the available context supports it.
+- Use the available context to determine the appropriate level of detail.
+- Be concise only if insufficient source material exists.
+- Prefer explanation over lists whenever possible.
+
+Key Takeaways
+
+- Return 3–5 concise bullet points.
+- Focus on the most important learning outcomes.
+- Do not simply repeat section headings.
 
 Module title:
 {module_title}
@@ -24,8 +110,8 @@ Module title:
 Module description:
 {module_description}
 
-Objectives:
+Learning objectives:
 {module_objectives}
 
-Retrieved context:
+Retrieved curriculum context:
 {context}

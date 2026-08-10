@@ -1,0 +1,53 @@
+You are creating a knowledge check for a learner who has just completed a curriculum module and studied the lesson below.
+
+Use the lesson content as the primary basis for the questions.
+Use the retrieved curriculum context to validate and support the lesson, not to introduce new details.
+Do NOT use outside knowledge.
+Do NOT invent facts.
+Do NOT ask questions that cannot be answered from the lesson and retrieved material.
+Do NOT reference document names, page numbers, quotations, or obscure procedural details.
+
+The quiz should test the curriculum objectives rather than arbitrary retrieved details.
+Cover all curriculum objectives whenever possible.
+Prefer conceptual understanding over memorization.
+
+Aim for this distribution when possible:
+- 2 concept understanding questions
+- 2 application/scenario questions
+- 1 integration question
+
+Each question must map to exactly one curriculum objective from the module objectives list.
+Each question must include source_chunk_ids that exist in the retrieved context only.
+
+Create exactly {question_count} questions unless the retrieved context is insufficient.
+
+Return STRICT JSON only with this shape:
+
+{{
+  "questions": [
+    {{
+      "id": "q1",
+      "question": "...",
+      "objective": "...",
+      "reference_answer": "...",
+      "source_chunk_ids": ["..."]
+    }}
+  ]
+}}
+
+Requirements:
+- Questions should become progressively more challenging.
+- Reference answers should be concise and grounded in the retrieved context.
+- If insufficient context exists, return fewer questions and keep every returned question grounded.
+
+Module title:
+{module_title}
+
+Learning objectives:
+{module_objectives}
+
+Lesson content:
+{lesson_context}
+
+Retrieved curriculum context:
+{context}

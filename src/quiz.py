@@ -6,6 +6,8 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 from typing import Any, Sequence
 
 from src.config import CHAT_MODEL
@@ -16,7 +18,32 @@ from src.retrieve import RetrievedChunk
 
 logger = logging.getLogger(__name__)
 
-QUIZ_PASS_THRESHOLD = 0.67
+QUIZ_PASS_THRESHOLD = 2 / 3
+QUIZ_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "quiz.txt"
+QUIZ_EVALUATION_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "number_correct": {"type": "integer"},
+        "total_questions": {"type": "integer"},
+        "percentage": {"type": "number"},
+        "passed": {"type": "boolean"},
+        "question_feedback": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "id": {"type": "string"},
+                    "correct": {"type": "boolean"},
+                    "explanation": {"type": "string"},
+                },
+                "required": ["id", "correct", "explanation"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["number_correct", "total_questions", "percentage", "passed", "question_feedback"],
+    "additionalProperties": False,
+}
 
 
 class QuizGenerationError(RuntimeError):
@@ -33,8 +60,18 @@ class QuizQuestion:
 
     id: str
     question: str
+    objective: str
     reference_answer: str
     source_chunk_ids: list[str] = field(default_factory=list)
+
+
+@dataclass(slots=True)
+class QuizQuestionFeedback:
+    """Evaluation feedback for a single quiz question."""
+
+    id: str
+    correct: bool
+    explanation: str
 
 
 @dataclass(slots=True)
@@ -53,10 +90,30 @@ class QuizEvaluation:
     """Structured quiz evaluation result."""
 
     module_id: str
-    score: float
+    number_correct: int
+    total_questions: int
+    percentage: float
     passed: bool
-    feedback: str
-    question_feedback: list[str]
+    question_feedback: list[QuizQuestionFeedback]
+
+    @property
+    def score(self) -> float:
+        """Backward-compatible normalized score."""
+
+        if self.total_questions <= 0:
+            return 0.0
+        return self.number_correct / self.total_questions
+
+    @property
+    def feedback(self) -> str:
+        """Backward-compatible overall feedback summary."""
+
+        if not self.question_feedback:
+            return ""
+        incorrect_ids = [item.id.upper() for item in self.question_feedback if not item.correct]
+        if not incorrect_ids:
+            return "All answers were correct."
+        return f"Review questions: {', '.join(incorrect_ids)}"
 
 
 def _unique_document_titles(retrieved_chunks: Sequence[RetrievedChunk]) -> list[str]:
@@ -90,6 +147,50 @@ def _build_context(retrieved_chunks: Sequence[RetrievedChunk]) -> str:
     return "\n\n---\n\n".join(sections)
 
 
+def _build_lesson_context(
+    lesson_title: str | None,
+    lesson_content: str | None,
+    lesson_takeaways: Sequence[str] | None,
+) -> str:
+    """Format the generated lesson content for quiz prompting."""
+
+    sections: list[str] = []
+    if lesson_title:
+        sections.append(f"Lesson title: {lesson_title}")
+    if lesson_content:
+        sections.append("Lesson content:")
+        sections.append(lesson_content.strip())
+    if lesson_takeaways:
+        sections.append("Key takeaways:")
+        sections.extend(f"- {item}" for item in lesson_takeaways if str(item).strip())
+    return "\n".join(sections).strip()
+
+
+def _load_prompt_template() -> str:
+    """Load the quiz-generation prompt from disk."""
+
+    try:
+        return QUIZ_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+        raise QuizGenerationError(f"Prompt file not found: {QUIZ_PROMPT_PATH}") from exc
+
+
+@lru_cache(maxsize=1)
+def _get_prompt_template() -> str:
+    return _load_prompt_template()
+
+
+def _quiz_evaluation_response_format() -> dict[str, Any]:
+    """Build the structured-output request for quiz evaluation."""
+
+    return {
+        "type": "json_schema",
+        "name": "quiz_evaluation",
+        "schema": QUIZ_EVALUATION_SCHEMA,
+        "strict": True,
+    }
+
+
 def _extract_json_object(text: str) -> dict[str, Any]:
     cleaned = text.strip()
     if not cleaned:
@@ -108,18 +209,28 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     return loaded
 
 
-def _as_question(item: Any, fallback_id: str) -> QuizQuestion:
+def _as_question(item: Any, fallback_id: str, *, allowed_source_chunk_ids: set[str], allowed_objectives: set[str]) -> QuizQuestion:
     if isinstance(item, dict):
         question = str(item.get("question", "")).strip()
+        objective = str(item.get("objective", "")).strip()
         reference_answer = str(item.get("reference_answer", "")).strip()
         source_chunk_ids = item.get("source_chunk_ids", [])
         if not isinstance(source_chunk_ids, list):
             source_chunk_ids = []
+        normalized_source_chunk_ids = [str(chunk_id).strip() for chunk_id in source_chunk_ids if str(chunk_id).strip()]
+        if not normalized_source_chunk_ids:
+            raise QuizGenerationError("Quiz questions must reference at least one retrieved source chunk")
+        invalid_chunk_ids = [chunk_id for chunk_id in normalized_source_chunk_ids if chunk_id not in allowed_source_chunk_ids]
+        if invalid_chunk_ids:
+            raise QuizGenerationError("Quiz questions must reference retrieved source chunks only")
+        if objective not in allowed_objectives:
+            raise QuizGenerationError("Quiz question objective must match a curriculum objective")
         return QuizQuestion(
             id=str(item.get("id", fallback_id)).strip() or fallback_id,
             question=question,
+            objective=objective,
             reference_answer=reference_answer,
-            source_chunk_ids=[str(chunk_id) for chunk_id in source_chunk_ids if str(chunk_id).strip()],
+            source_chunk_ids=normalized_source_chunk_ids,
         )
     raise QuizGenerationError("Quiz questions must be returned as objects")
 
@@ -128,7 +239,10 @@ def generate_quiz(
     module: CurriculumModule,
     retrieved_chunks: Sequence[RetrievedChunk],
     *,
-    question_count: int = 3,
+    question_count: int = 5,
+    lesson_title: str | None = None,
+    lesson_content: str | None = None,
+    lesson_takeaways: Sequence[str] | None = None,
 ) -> GeneratedQuiz:
     """Generate a short quiz from retrieved curriculum context."""
 
@@ -136,17 +250,15 @@ def generate_quiz(
         raise QuizGenerationError("Cannot generate a quiz without retrieved curriculum context")
 
     context = _build_context(retrieved_chunks)
-    prompt = "\n".join(
-        [
-            f"You are generating a short knowledge check for the curriculum module '{module.title}'.",
-            f"Module id: {module.id}",
-            "Use only the provided context.",
-            f"Create {question_count} concise questions with reference answers.",
-            "Return strict JSON with this shape:",
-            '{"questions": [{"id": "q1", "question": "...", "reference_answer": "...", "source_chunk_ids": []}]}',
-            "Context:",
-            context,
-        ]
+    lesson_context = _build_lesson_context(lesson_title, lesson_content, lesson_takeaways)
+    prompt_template = _get_prompt_template()
+    module_objectives = "\n".join(f"- {objective}" for objective in module.objectives)
+    prompt = prompt_template.format(
+        module_title=module.title,
+        module_objectives=module_objectives,
+        question_count=question_count,
+        lesson_context=lesson_context,
+        context=context,
     )
 
     try:
@@ -165,7 +277,17 @@ def generate_quiz(
     if not isinstance(raw_questions, list) or not raw_questions:
         raise QuizGenerationError("Quiz generation returned no questions")
 
-    questions = [_as_question(item, f"q{index}") for index, item in enumerate(raw_questions, start=1)]
+    allowed_source_chunk_ids = {chunk.id for chunk in retrieved_chunks}
+    allowed_objectives = {objective.strip() for objective in module.objectives if objective.strip()}
+    questions = [
+        _as_question(
+            item,
+            f"q{index}",
+            allowed_source_chunk_ids=allowed_source_chunk_ids,
+            allowed_objectives=allowed_objectives,
+        )
+        for index, item in enumerate(raw_questions, start=1)
+    ]
     if len(questions) < 2:
         raise QuizGenerationError("Quiz generation must return at least two questions")
     questions = questions[:question_count]
@@ -206,7 +328,8 @@ def evaluate_quiz(
         [
             f"Evaluate this quiz for module '{quiz.module_title}' ({quiz.module_id}).",
             "Use only the provided context and reference answers.",
-            "Return strict JSON with fields: score, passed, feedback, question_feedback.",
+            "Return strict JSON with fields: number_correct, total_questions, percentage, passed, question_feedback.",
+            "Each question_feedback item must contain: id, correct, explanation.",
             "Question/answer pairs:",
             json.dumps(answers_payload, ensure_ascii=False),
             "Context:",
@@ -215,7 +338,11 @@ def evaluate_quiz(
     )
 
     try:
-        response = client.responses.create(model=CHAT_MODEL, input=prompt)
+        response = client.responses.create(
+            model=CHAT_MODEL,
+            input=prompt,
+            text={"format": _quiz_evaluation_response_format()},
+        )
     except Exception as exc:  # pragma: no cover - exercised via failure tests
         logger.exception("Quiz evaluation failed")
         raise QuizEvaluationError("Failed to evaluate the quiz") from exc
@@ -226,28 +353,58 @@ def evaluate_quiz(
     except Exception as exc:  # pragma: no cover - guarded by tests
         raise QuizEvaluationError("Quiz evaluation must return JSON") from exc
 
-    try:
-        score = float(payload.get("score", 0.0))
-    except (TypeError, ValueError) as exc:
-        raise QuizEvaluationError("Quiz evaluation score must be numeric") from exc
+    raw_question_feedback = payload.get("question_feedback", [])
+    if not isinstance(raw_question_feedback, list):
+        raise QuizEvaluationError("Quiz evaluation question feedback must be a list")
 
-    question_feedback = payload.get("question_feedback", [])
-    if not isinstance(question_feedback, list):
-        question_feedback = []
+    question_feedback: list[QuizQuestionFeedback] = []
+    for item in raw_question_feedback:
+        if not isinstance(item, dict):
+            raise QuizEvaluationError("Quiz evaluation question feedback must contain objects")
 
-    passed = score >= QUIZ_PASS_THRESHOLD
-    feedback = str(payload.get("feedback", "")).strip()
+        feedback_id = str(item.get("id", "")).strip()
+        explanation = str(item.get("explanation", "")).strip()
+        correct = item.get("correct")
+        if not feedback_id or not explanation or not isinstance(correct, bool):
+            raise QuizEvaluationError("Quiz evaluation question feedback is incomplete")
+        question_feedback.append(
+            QuizQuestionFeedback(
+                id=feedback_id,
+                correct=correct,
+                explanation=explanation,
+            )
+        )
 
+    if len(question_feedback) != len(quiz.questions):
+        raise QuizEvaluationError("Quiz evaluation must return feedback for each question")
+
+    expected_question_ids = [question.id for question in quiz.questions]
+    returned_question_ids = [item.id for item in question_feedback]
+    if returned_question_ids != expected_question_ids:
+        raise QuizEvaluationError("Quiz evaluation feedback ids must match the quiz questions")
+
+    total_questions = len(question_feedback)
+    if total_questions <= 0:
+        raise QuizEvaluationError("Quiz evaluation question feedback must not be empty")
+
+    number_correct = sum(1 for item in question_feedback if item.correct)
+    percentage = round((number_correct / total_questions) * 100, 2)
+
+    score_ratio = number_correct / total_questions
+    passed = score_ratio >= QUIZ_PASS_THRESHOLD
     logger.info(
-        "Evaluated quiz for module %s with score %.2f and passed=%s",
+        "Evaluated quiz for module %s with %d/%d correct (%.2f%%) and passed=%s",
         quiz.module_id,
-        score,
+        number_correct,
+        total_questions,
+        percentage,
         passed,
     )
     return QuizEvaluation(
         module_id=quiz.module_id,
-        score=score,
+        number_correct=number_correct,
+        total_questions=total_questions,
+        percentage=percentage,
         passed=passed,
-        feedback=feedback,
-        question_feedback=[str(item) for item in question_feedback],
+        question_feedback=question_feedback,
     )
