@@ -316,20 +316,3 @@ low confidence
 ## 7 Notes
 
 
-# 1 question no 9
-
-## 1b answer
-
-## 2 Expected document(s)
-
-## 3 Retrieved document(s)
-
-## 4 Answer correct?
-✅
-## 5 Citations appropriate?
-✅
-## 6 Retrieval quality
-good
-## confidence
-
-## 7 Notes

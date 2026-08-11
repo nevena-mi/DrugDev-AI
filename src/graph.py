@@ -17,6 +17,7 @@ from src.curriculum import (
     next_modules as curriculum_next_modules,
 )
 from src.openai_client import client
+from src.rerank import RerankedChunk, RerankingError, rerank_chunks
 from src.quiz import GeneratedQuiz, QuizEvaluation, evaluate_quiz, generate_quiz
 from src.retrieve import RetrievedChunk, retrieve_chunks
 
@@ -24,6 +25,8 @@ from src.retrieve import RetrievedChunk, retrieve_chunks
 logger = logging.getLogger(__name__)
 
 INSUFFICIENT_INFORMATION = "I cannot answer from the available documents."
+ASK_RETRIEVAL_CANDIDATE_TOP_K = 15
+ASK_FINAL_TOP_K = 5
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "answer.txt"
 LESSON_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "lesson.txt"
 LESSON_INSUFFICIENT_INFORMATION = "I cannot generate a lesson from the available documents."
@@ -220,6 +223,45 @@ def _build_context(chunks: list[RetrievedChunk]) -> str:
     return "\n\n---\n\n".join(sections)
 
 
+def _reranked_to_retrieved_chunk(chunk: RerankedChunk) -> RetrievedChunk:
+    """Convert a reranked chunk back into the retrieval chunk shape."""
+
+    return RetrievedChunk(
+        id=chunk.id,
+        score=chunk.pinecone_score,
+        text=chunk.text,
+        metadata=dict(chunk.metadata),
+    )
+
+
+def _select_ask_chunks(question: str, *, namespace: str | None = None) -> tuple[list[RetrievedChunk], str]:
+    """Retrieve Ask-mode candidates and rerank them when possible."""
+
+    pinecone_chunks = retrieve_chunks(question, top_k=ASK_RETRIEVAL_CANDIDATE_TOP_K, namespace=namespace)
+    if not pinecone_chunks:
+        return [], "corpus"
+
+    try:
+        reranked_chunks = rerank_chunks(
+            question,
+            pinecone_chunks,
+            top_n=min(ASK_FINAL_TOP_K, len(pinecone_chunks)),
+        )
+    except RerankingError:
+        logger.exception(
+            "Cohere reranking failed for Ask-mode question %r; falling back to Pinecone top %d",
+            question,
+            ASK_FINAL_TOP_K,
+        )
+        return pinecone_chunks[:ASK_FINAL_TOP_K], "corpus"
+
+    selected_chunks = [
+        _reranked_to_retrieved_chunk(chunk)
+        for chunk in reranked_chunks[:ASK_FINAL_TOP_K]
+    ]
+    return selected_chunks, "reranked"
+
+
 def _unique_citations(chunks: Sequence[RetrievedChunk]) -> list[SourceCitation]:
     """Build deterministic unique citations from retrieved chunks."""
 
@@ -296,7 +338,7 @@ def _retrieve_grounded_chunks(
 def _generate_answer_state(
     question: str,
     *,
-    top_k: int = 5,
+    top_k: int = ASK_FINAL_TOP_K,
     namespace: str | None = None,
     document_paths: Sequence[str] | None = None,
     allow_fallback: bool = False,
@@ -310,13 +352,19 @@ def _generate_answer_state(
         document_paths=list(document_paths) if document_paths is not None else None,
         allow_fallback=allow_fallback,
     )
-    state.retrieved_chunks, state.retrieval_scope = _retrieve_grounded_chunks(
-        question,
-        top_k=top_k,
-        namespace=namespace,
-        document_paths=document_paths,
-        allow_fallback=allow_fallback,
-    )
+    if document_paths is None:
+        state.retrieved_chunks, state.retrieval_scope = _select_ask_chunks(
+            question,
+            namespace=namespace,
+        )
+    else:
+        state.retrieved_chunks, state.retrieval_scope = _retrieve_grounded_chunks(
+            question,
+            top_k=top_k,
+            namespace=namespace,
+            document_paths=document_paths,
+            allow_fallback=allow_fallback,
+        )
     state.context = _build_context(state.retrieved_chunks)
     state = _generate(state)
     state = _respond(state)
