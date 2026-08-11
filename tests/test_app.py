@@ -34,6 +34,7 @@ class FakeStreamlit:
         self.buttons = buttons or {}
         self.session_state = session_state or {}
         self.calls: list[tuple[str, object]] = []
+        self.rerun_called = False
 
     def set_page_config(self, **kwargs):
         self.calls.append(("set_page_config", kwargs))
@@ -75,6 +76,10 @@ class FakeStreamlit:
 
     def warning(self, text: str) -> None:
         self.calls.append(("warning", text))
+
+    def rerun(self) -> None:
+        self.rerun_called = True
+        self.calls.append(("rerun", None))
 
     def divider(self) -> None:
         self.calls.append(("divider", None))
@@ -273,6 +278,8 @@ def test_main_routes_learn_interactions_to_backend() -> None:
     assert generate_quiz.call_count == 1
     assert evaluate_quiz.call_count == 1
     assert complete_module.call_count == 0
+    assert evaluate_quiz.call_args.args[1] == "Grounded lesson content."
+    assert evaluate_quiz.call_args.args[2] == ["Good Clinical Practice", "Sponsors"]
     assert fake_session.quiz_result is fake_quiz_result
     assert any(call[0] == "subheader" and call[1] == "Learning Content" for call in fake_streamlit.calls)
     assert any(call[0] == "write" and call[1] == "Grounded lesson content." for call in fake_streamlit.calls)

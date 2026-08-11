@@ -27,6 +27,8 @@ logger = logging.getLogger(__name__)
 INSUFFICIENT_INFORMATION = "I cannot answer from the available documents."
 ASK_RETRIEVAL_CANDIDATE_TOP_K = 15
 ASK_FINAL_TOP_K = 5
+LEARN_RETRIEVAL_CANDIDATE_TOP_K = 15
+LEARN_FINAL_TOP_K = 5
 PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "answer.txt"
 LESSON_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "lesson.txt"
 LESSON_INSUFFICIENT_INFORMATION = "I cannot generate a lesson from the available documents."
@@ -262,6 +264,40 @@ def _select_ask_chunks(question: str, *, namespace: str | None = None) -> tuple[
     return selected_chunks, "reranked"
 
 
+def _rerank_candidate_chunks(
+    question: str,
+    candidate_chunks: Sequence[RetrievedChunk],
+    *,
+    scope: str,
+    final_top_k: int = LEARN_FINAL_TOP_K,
+) -> tuple[list[RetrievedChunk], str]:
+    """Rerank candidate chunks and fall back to the original Pinecone order if needed."""
+
+    if not candidate_chunks:
+        return [], scope
+
+    try:
+        reranked_chunks = rerank_chunks(
+            question,
+            candidate_chunks,
+            top_n=min(final_top_k, len(candidate_chunks)),
+        )
+    except RerankingError:
+        logger.exception(
+            "Cohere reranking failed for Learn-mode question %r in %s scope; falling back to Pinecone top %d",
+            question,
+            scope,
+            final_top_k,
+        )
+        return list(candidate_chunks[:final_top_k]), scope
+
+    selected_chunks = [
+        _reranked_to_retrieved_chunk(chunk)
+        for chunk in reranked_chunks[:final_top_k]
+    ]
+    return selected_chunks, scope
+
+
 def _unique_citations(chunks: Sequence[RetrievedChunk]) -> list[SourceCitation]:
     """Build deterministic unique citations from retrieved chunks."""
 
@@ -304,7 +340,7 @@ def _lesson_response_format() -> dict[str, Any]:
 def _retrieve_grounded_chunks(
     question: str,
     *,
-    top_k: int = 5,
+    top_k: int = LEARN_RETRIEVAL_CANDIDATE_TOP_K,
     namespace: str | None = None,
     document_paths: Sequence[str] | None = None,
     allow_fallback: bool = False,
@@ -313,7 +349,7 @@ def _retrieve_grounded_chunks(
 
     if document_paths is None:
         chunks = retrieve_chunks(question, top_k=top_k, namespace=namespace)
-        return chunks, "corpus"
+        return _rerank_candidate_chunks(question, chunks, scope="corpus")
 
     strict_chunks = retrieve_chunks(
         question,
@@ -322,7 +358,7 @@ def _retrieve_grounded_chunks(
         document_paths=document_paths,
     )
     if strict_chunks:
-        return strict_chunks, "module"
+        return _rerank_candidate_chunks(question, strict_chunks, scope="module")
 
     if allow_fallback:
         logger.info(
@@ -330,7 +366,7 @@ def _retrieve_grounded_chunks(
             question,
         )
         fallback_chunks = retrieve_chunks(question, top_k=top_k, namespace=namespace)
-        return fallback_chunks, "fallback"
+        return _rerank_candidate_chunks(question, fallback_chunks, scope="fallback")
 
     return [], "module"
 
@@ -517,7 +553,7 @@ def answer_learning_question(
     module_id: str,
     question: str,
     *,
-    top_k: int = 5,
+    top_k: int = LEARN_RETRIEVAL_CANDIDATE_TOP_K,
     namespace: str | None = None,
 ) -> LearningAnswer:
     """Answer a learner question using module-scoped retrieval."""
@@ -544,7 +580,7 @@ def answer_learning_question(
 def explain_learning_module(
     module_id: str,
     *,
-    top_k: int = 5,
+    top_k: int = LEARN_RETRIEVAL_CANDIDATE_TOP_K,
     namespace: str | None = None,
 ) -> LearningAnswer:
     """Generate a grounded explanation for the current curriculum module."""
@@ -567,7 +603,7 @@ def explain_learning_module(
 def generate_learning_lesson(
     module_id: str,
     *,
-    top_k: int = 5,
+    top_k: int = LEARN_RETRIEVAL_CANDIDATE_TOP_K,
     namespace: str | None = None,
 ) -> LearningLesson:
     """Generate a grounded lesson for a curriculum module."""
@@ -646,7 +682,7 @@ def generate_learning_lesson(
 def ensure_learning_lesson(
     session: LearningSession,
     *,
-    top_k: int = 5,
+    top_k: int = LEARN_RETRIEVAL_CANDIDATE_TOP_K,
     namespace: str | None = None,
     force: bool = False,
 ) -> LearningLesson:
@@ -672,7 +708,7 @@ def ensure_learning_lesson(
 def generate_learning_quiz(
     module_id: str,
     *,
-    top_k: int = 5,
+    top_k: int = LEARN_RETRIEVAL_CANDIDATE_TOP_K,
     namespace: str | None = None,
     lesson: LearningLesson | None = None,
 ) -> LearningQuizBundle:
@@ -711,11 +747,12 @@ def generate_learning_quiz(
 
 def evaluate_learning_quiz(
     quiz_bundle: LearningQuizBundle,
+    lesson_content: str,
     learner_answers: Sequence[str],
 ) -> QuizEvaluation:
     """Grade learner answers against the retrieved curriculum context."""
 
-    return evaluate_quiz(quiz_bundle.quiz, learner_answers, quiz_bundle.retrieved_chunks)
+    return evaluate_quiz(quiz_bundle.quiz, learner_answers, lesson_content, quiz_bundle.retrieved_chunks)
 
 
 def recommend_next_module(

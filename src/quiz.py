@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 
 QUIZ_PASS_THRESHOLD = 2 / 3
 QUIZ_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "quiz.txt"
+QUIZ_EVALUATION_PROMPT_PATH = Path(__file__).resolve().parents[1] / "prompts" / "quiz_evaluation.txt"
 QUIZ_EVALUATION_SCHEMA = {
     "type": "object",
     "properties": {
@@ -180,6 +181,20 @@ def _get_prompt_template() -> str:
     return _load_prompt_template()
 
 
+def _load_quiz_evaluation_prompt_template() -> str:
+    """Load the quiz-evaluation prompt from disk."""
+
+    try:
+        return QUIZ_EVALUATION_PROMPT_PATH.read_text(encoding="utf-8").strip()
+    except FileNotFoundError as exc:  # pragma: no cover - defensive guard
+        raise QuizEvaluationError(f"Prompt file not found: {QUIZ_EVALUATION_PROMPT_PATH}") from exc
+
+
+@lru_cache(maxsize=1)
+def _get_quiz_evaluation_prompt_template() -> str:
+    return _load_quiz_evaluation_prompt_template()
+
+
 def _quiz_evaluation_response_format() -> dict[str, Any]:
     """Build the structured-output request for quiz evaluation."""
 
@@ -209,28 +224,73 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     return loaded
 
 
-def _as_question(item: Any, fallback_id: str, *, allowed_source_chunk_ids: set[str], allowed_objectives: set[str]) -> QuizQuestion:
+def _require_non_empty_string(value: Any, field_name: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise QuizGenerationError(f"Quiz question {field_name} must be a non-empty string")
+    return value.strip()
+
+
+def _question_diagnostics(item: Any, fallback_id: str) -> tuple[str, str, list[Any]]:
+    """Extract question diagnostics for logging without changing validation."""
+
     if isinstance(item, dict):
-        question = str(item.get("question", "")).strip()
-        objective = str(item.get("objective", "")).strip()
-        reference_answer = str(item.get("reference_answer", "")).strip()
+        raw_id = item.get("id")
+        question_id = raw_id.strip() if isinstance(raw_id, str) and raw_id.strip() else fallback_id
+        objective = item.get("objective", "")
         source_chunk_ids = item.get("source_chunk_ids", [])
         if not isinstance(source_chunk_ids, list):
             source_chunk_ids = []
-        normalized_source_chunk_ids = [str(chunk_id).strip() for chunk_id in source_chunk_ids if str(chunk_id).strip()]
-        if not normalized_source_chunk_ids:
-            raise QuizGenerationError("Quiz questions must reference at least one retrieved source chunk")
-        invalid_chunk_ids = [chunk_id for chunk_id in normalized_source_chunk_ids if chunk_id not in allowed_source_chunk_ids]
-        if invalid_chunk_ids:
-            raise QuizGenerationError("Quiz questions must reference retrieved source chunks only")
+        return question_id, str(objective), list(source_chunk_ids)
+
+    return fallback_id, "", []
+
+
+def _log_question_rejection(
+    *,
+    question_id: str,
+    reason: str,
+    objective: str,
+    source_chunk_ids: list[Any],
+) -> None:
+    """Log a rejected quiz question for temporary diagnostics."""
+
+    logger.warning(
+        "Rejected quiz question id=%s reason=%s objective=%r source_chunk_ids=%r",
+        question_id,
+        reason,
+        objective,
+        source_chunk_ids,
+    )
+
+
+def _quiz_source_chunk_ids(retrieved_chunks: Sequence[RetrievedChunk]) -> list[str]:
+    """Build deterministic source chunk IDs from the retrieved quiz context."""
+
+    source_chunk_ids: list[str] = []
+    seen: set[str] = set()
+    for chunk in retrieved_chunks:
+        chunk_id = chunk.id.strip()
+        if not chunk_id or chunk_id in seen:
+            continue
+        seen.add(chunk_id)
+        source_chunk_ids.append(chunk_id)
+    return source_chunk_ids
+
+
+def _as_question(item: Any, fallback_id: str, *, allowed_objectives: set[str]) -> QuizQuestion:
+    if isinstance(item, dict):
+        question_id = _require_non_empty_string(item.get("id"), "id")
+        question = _require_non_empty_string(item.get("question"), "question")
+        objective = _require_non_empty_string(item.get("objective"), "objective")
+        reference_answer = _require_non_empty_string(item.get("reference_answer"), "reference_answer")
         if objective not in allowed_objectives:
             raise QuizGenerationError("Quiz question objective must match a curriculum objective")
         return QuizQuestion(
-            id=str(item.get("id", fallback_id)).strip() or fallback_id,
+            id=question_id.strip(),
             question=question,
             objective=objective,
             reference_answer=reference_answer,
-            source_chunk_ids=normalized_source_chunk_ids,
+            source_chunk_ids=[],
         )
     raise QuizGenerationError("Quiz questions must be returned as objects")
 
@@ -248,6 +308,8 @@ def generate_quiz(
 
     if not retrieved_chunks:
         raise QuizGenerationError("Cannot generate a quiz without retrieved curriculum context")
+    if question_count <= 0:
+        raise QuizGenerationError("Question count must be a positive integer")
 
     context = _build_context(retrieved_chunks)
     lesson_context = _build_lesson_context(lesson_title, lesson_content, lesson_takeaways)
@@ -276,21 +338,48 @@ def generate_quiz(
     raw_questions = payload.get("questions", [])
     if not isinstance(raw_questions, list) or not raw_questions:
         raise QuizGenerationError("Quiz generation returned no questions")
+    logger.warning("Quiz generation returned %d raw questions for module %s", len(raw_questions), module.id)
 
-    allowed_source_chunk_ids = {chunk.id for chunk in retrieved_chunks}
     allowed_objectives = {objective.strip() for objective in module.objectives if objective.strip()}
-    questions = [
-        _as_question(
-            item,
-            f"q{index}",
-            allowed_source_chunk_ids=allowed_source_chunk_ids,
-            allowed_objectives=allowed_objectives,
-        )
-        for index, item in enumerate(raw_questions, start=1)
-    ]
+    source_chunk_ids = _quiz_source_chunk_ids(retrieved_chunks)
+    questions: list[QuizQuestion] = []
+    seen_question_ids: set[str] = set()
+    for index, item in enumerate(raw_questions, start=1):
+        if len(questions) >= question_count:
+            break
+        fallback_id = f"q{index}"
+        question_id, objective, raw_source_chunk_ids = _question_diagnostics(item, fallback_id)
+        try:
+            question = _as_question(
+                item,
+                fallback_id,
+                allowed_objectives=allowed_objectives,
+            )
+        except QuizGenerationError as exc:
+            _log_question_rejection(
+                question_id=question_id,
+                reason=str(exc),
+                objective=objective,
+                source_chunk_ids=raw_source_chunk_ids,
+            )
+            continue
+
+        if question.id in seen_question_ids:
+            _log_question_rejection(
+                question_id=question.id,
+                reason="duplicate question id",
+                objective=question.objective,
+                source_chunk_ids=question.source_chunk_ids,
+            )
+            continue
+
+        seen_question_ids.add(question.id)
+        question.source_chunk_ids = list(source_chunk_ids)
+        questions.append(question)
+
     if len(questions) < 2:
-        raise QuizGenerationError("Quiz generation must return at least two questions")
-    questions = questions[:question_count]
+        raise QuizGenerationError("Quiz generation must return at least two valid questions")
+    logger.warning("Quiz generation retained %d valid questions for module %s", len(questions), module.id)
     source_document_titles = _unique_document_titles(retrieved_chunks)
 
     logger.info("Generated %d quiz questions for module %s", len(questions), module.id)
@@ -306,6 +395,7 @@ def generate_quiz(
 def evaluate_quiz(
     quiz: GeneratedQuiz,
     learner_answers: Sequence[str],
+    lesson_content: str,
     retrieved_chunks: Sequence[RetrievedChunk],
 ) -> QuizEvaluation:
     """Evaluate quiz answers using only retrieved curriculum context."""
@@ -323,18 +413,12 @@ def evaluate_quiz(
         }
         for question, answer in zip(quiz.questions, learner_answers, strict=True)
     ]
-
-    prompt = "\n".join(
-        [
-            f"Evaluate this quiz for module '{quiz.module_title}' ({quiz.module_id}).",
-            "Use only the provided context and reference answers.",
-            "Return strict JSON with fields: number_correct, total_questions, percentage, passed, question_feedback.",
-            "Each question_feedback item must contain: id, correct, explanation.",
-            "Question/answer pairs:",
-            json.dumps(answers_payload, ensure_ascii=False),
-            "Context:",
-            context,
-        ]
+    prompt_template = _get_quiz_evaluation_prompt_template()
+    prompt = prompt_template.format(
+        module_title=quiz.module_title,
+        lesson_context=lesson_content.strip(),
+        answers_payload=json.dumps(answers_payload, ensure_ascii=False),
+        context=context,
     )
 
     try:

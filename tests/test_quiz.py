@@ -50,21 +50,18 @@ def test_generate_quiz_uses_retrieved_curriculum_context() -> None:
                 "question": "What is the purpose of Good Clinical Practice?",
                 "objective": "Understand the drug development lifecycle",
                 "reference_answer": "To provide standards for clinical trials.",
-                "source_chunk_ids": [retrieved_chunks[0].id],
             },
             {
                 "id": "q2",
                 "question": "Name one regulatory agency involved in drug development.",
                 "objective": "Recognize major stakeholders",
                 "reference_answer": "FDA or EMA.",
-                "source_chunk_ids": [retrieved_chunks[1].id],
             },
             {
                 "id": "q3",
                 "question": "What is the drug development lifecycle?",
                 "objective": "Understand the drug development lifecycle",
                 "reference_answer": "The stages from discovery to approval.",
-                "source_chunk_ids": [retrieved_chunks[0].id, retrieved_chunks[1].id],
             },
         ]
     }
@@ -86,6 +83,7 @@ def test_generate_quiz_uses_retrieved_curriculum_context() -> None:
             ],
         )
 
+    expected_source_chunk_ids = [chunk.id for chunk in retrieved_chunks]
     assert quiz.module_id == module.id
     assert quiz.module_title == module.title
     assert len(quiz.questions) == 3
@@ -99,9 +97,7 @@ def test_generate_quiz_uses_retrieved_curriculum_context() -> None:
         "FDA or EMA.",
         "The stages from discovery to approval.",
     ]
-    assert quiz.questions[0].source_chunk_ids == [retrieved_chunks[0].id]
-    assert quiz.questions[1].source_chunk_ids == [retrieved_chunks[1].id]
-    assert quiz.questions[2].source_chunk_ids == [retrieved_chunks[0].id, retrieved_chunks[1].id]
+    assert all(question.source_chunk_ids == expected_source_chunk_ids for question in quiz.questions)
     assert quiz.source_document_titles == [
         "EMA Human Regulatory Overview",
         "FDA Drug Development and Approval Process",
@@ -111,9 +107,146 @@ def test_generate_quiz_uses_retrieved_curriculum_context() -> None:
     assert "The lesson explains the lifecycle, stakeholders, and terminology." in captured["input"]
     assert "Recognize major stakeholders." in captured["input"]
     assert "Lesson content:" in captured["input"]
-    assert "Create exactly 5 questions" in captured["input"]
+    assert "Prefer 3 to 5 strong questions" in captured["input"]
     assert retrieved_chunks[0].text in captured["input"]
     assert quiz_module._get_prompt_template().startswith("You are creating a knowledge check")
+
+
+def test_generate_quiz_attaches_deduplicated_source_chunk_ids() -> None:
+    module = get_module("foundations")
+    assert module is not None
+    retrieved_chunks = [
+        _make_chunk(),
+        _make_chunk(),
+    ]
+    payload = {
+        "questions": [
+            {
+                "id": "q1",
+                "question": "What is the purpose of Good Clinical Practice?",
+                "objective": "Understand the drug development lifecycle",
+                "reference_answer": "To provide standards for clinical trials.",
+            },
+            {
+                "id": "q2",
+                "question": "Name one regulatory agency involved in drug development.",
+                "objective": "Recognize major stakeholders",
+                "reference_answer": "FDA or EMA.",
+            },
+            {
+                "id": "q3",
+                "question": "What is the drug development lifecycle?",
+                "objective": "Understand the drug development lifecycle",
+                "reference_answer": "The stages from discovery to approval.",
+            },
+        ]
+    }
+
+    with patch.object(
+        quiz_module.client.responses,
+        "create",
+        return_value=SimpleNamespace(output_text=json.dumps(payload)),
+    ):
+        quiz = quiz_module.generate_quiz(
+            module,
+            retrieved_chunks,
+            lesson_title="Introduction to Drug Development",
+            lesson_content="The lesson explains the lifecycle, stakeholders, and terminology.",
+            lesson_takeaways=[
+                "Understand the drug development lifecycle.",
+                "Recognize major stakeholders.",
+            ],
+        )
+
+    assert len(quiz.questions) == 3
+    assert [question.id for question in quiz.questions] == ["q1", "q2", "q3"]
+    assert all(question.source_chunk_ids == [retrieved_chunks[0].id] for question in quiz.questions)
+    assert all(question.question.strip() for question in quiz.questions)
+    assert all(question.reference_answer.strip() for question in quiz.questions)
+
+
+def test_generate_quiz_rejects_invalid_objective_or_empty_fields() -> None:
+    module = get_module("foundations")
+    assert module is not None
+    retrieved_chunks = [_make_chunk()]
+
+    invalid_payloads = [
+        {
+            "questions": [
+                {
+                    "id": "q1",
+                    "question": "What is the purpose of GCP?",
+                    "objective": "Unsupported objective",
+                    "reference_answer": "To provide standards for clinical trials.",
+                }
+            ]
+        },
+        {
+            "questions": [
+                {
+                    "id": "q1",
+                    "question": "",
+                    "objective": "Understand the drug development lifecycle",
+                    "reference_answer": "To provide standards for clinical trials.",
+                }
+            ]
+        },
+        {
+            "questions": [
+                {
+                    "id": "q1",
+                    "question": "What is the purpose of GCP?",
+                    "objective": "Understand the drug development lifecycle",
+                    "reference_answer": " ",
+                }
+            ]
+        },
+        {
+            "questions": [
+                {
+                    "id": "",
+                    "question": "What is the purpose of GCP?",
+                    "objective": "Understand the drug development lifecycle",
+                    "reference_answer": "To provide standards for clinical trials.",
+                }
+            ]
+        },
+    ]
+
+    for payload in invalid_payloads:
+        with patch.object(
+            quiz_module.client.responses,
+            "create",
+            return_value=SimpleNamespace(output_text=json.dumps(payload)),
+        ):
+            try:
+                quiz_module.generate_quiz(
+                    module,
+                    retrieved_chunks,
+                    lesson_title="Introduction to Drug Development",
+                    lesson_content="The lesson explains the lifecycle, stakeholders, and terminology.",
+                    lesson_takeaways=["Understand the drug development lifecycle."],
+                )
+            except quiz_module.QuizGenerationError:
+                pass
+            else:  # pragma: no cover - defensive assertion
+                raise AssertionError("Expected QuizGenerationError")
+
+
+def test_generate_quiz_rejects_invalid_question_count() -> None:
+    module = get_module("foundations")
+    assert module is not None
+    retrieved_chunks = [_make_chunk()]
+
+    with patch.object(quiz_module.client.responses, "create") as create:
+        try:
+            quiz_module.generate_quiz(module, retrieved_chunks, question_count=0)
+        except quiz_module.QuizGenerationError as exc:
+            assert "Question count" in str(exc)
+        else:  # pragma: no cover - defensive assertion
+            raise AssertionError("Expected QuizGenerationError")
+
+    assert create.call_count == 0
 
 
 def test_generate_quiz_raises_when_prompt_file_is_missing(tmp_path: Path) -> None:
@@ -188,6 +321,7 @@ def test_evaluate_quiz_is_grounded_in_context_and_returns_structured_result() ->
         result = quiz_module.evaluate_quiz(
             quiz,
             ["Good Clinical Practice", "Sponsor", "Drug lifecycle"],
+            "The lesson explains the lifecycle, stakeholders, and terminology.",
             retrieved_chunks,
         )
 
@@ -215,8 +349,11 @@ def test_evaluate_quiz_is_grounded_in_context_and_returns_structured_result() ->
         ),
     ]
     assert "Good Clinical Practice" in captured["input"]
+    assert "The lesson explains the lifecycle, stakeholders, and terminology." in captured["input"]
     assert retrieved_chunks[0].text in captured["input"]
-    assert "Return strict JSON with fields: number_correct, total_questions, percentage, passed, question_feedback." in captured["input"]
+    assert "Question/answer pairs:" in captured["input"]
+    assert "Retrieved curriculum context:" in captured["input"]
+    assert quiz_module._get_quiz_evaluation_prompt_template().startswith("You are evaluating")
     assert captured["text"] == {
         "format": {
             "type": "json_schema",
@@ -225,3 +362,42 @@ def test_evaluate_quiz_is_grounded_in_context_and_returns_structured_result() ->
             "strict": True,
         }
     }
+
+
+def test_evaluate_quiz_raises_when_prompt_file_is_missing(tmp_path: Path) -> None:
+    quiz = GeneratedQuiz(
+        module_id="foundations",
+        module_title="Introduction to Drug Development",
+        questions=[
+            QuizQuestion(
+                id="q1",
+                question="What is GCP?",
+                objective="Understand the drug development lifecycle",
+                reference_answer="Good Clinical Practice.",
+            )
+        ],
+        source_document_titles=["EMA Human Regulatory Overview"],
+        context_summary="context",
+    )
+    retrieved_chunks = [_make_chunk()]
+    missing_prompt = tmp_path / "missing_quiz_evaluation_prompt.txt"
+
+    quiz_module._get_quiz_evaluation_prompt_template.cache_clear()
+    with (
+        patch.object(quiz_module, "QUIZ_EVALUATION_PROMPT_PATH", missing_prompt),
+        patch.object(quiz_module.client.responses, "create") as create,
+    ):
+        try:
+            quiz_module.evaluate_quiz(
+                quiz,
+                ["Good Clinical Practice"],
+                "The lesson explains the lifecycle.",
+                retrieved_chunks,
+            )
+        except quiz_module.QuizEvaluationError as exc:
+            assert "Prompt file not found" in str(exc)
+        else:  # pragma: no cover - defensive assertion
+            raise AssertionError("Expected QuizEvaluationError")
+
+    assert create.call_count == 0
+    quiz_module._get_quiz_evaluation_prompt_template.cache_clear()

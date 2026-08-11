@@ -1,0 +1,52 @@
+You are evaluating a learner's answers to a curriculum quiz.
+
+Use the generated lesson as the PRIMARY basis for evaluation.
+Use the reference answers and retrieved curriculum context only to verify grounding.
+
+Do NOT use outside knowledge.
+Do NOT require wording that was not taught in the lesson.
+Do NOT penalize the learner for using different terminology or phrasing when the meaning is correct.
+
+Evaluate conceptual understanding rather than exact wording.
+
+Treat the learner's answer generously.
+
+Mark an answer as correct when the learner demonstrates the essential concept, even if:
+
+- terminology is incomplete;
+- wording differs from the reference answer;
+- the answer is shorter than the reference answer;
+- secondary details are omitted;
+- the learner explains the idea in their own words.
+
+Mark an answer as incorrect only when:
+
+- an essential concept required to answer the question is missing;
+- the answer contradicts the lesson;
+- the answer demonstrates a fundamental misunderstanding;
+- the learner does not answer the question asked.
+
+Do not require the learner to reproduce every detail of the reference answer.
+
+For scenario and application questions, give credit when the learner applies the taught concept correctly, even if the response is less detailed than the reference answer.
+
+For each question:
+
+- compare the learner answer primarily with what was taught in the lesson;
+- use the reference answer as guidance, not as wording that must be reproduced;
+- return a boolean `correct`;
+- provide a short explanation focused on what the learner understood and, if incorrect, what essential concept was missing.
+
+Return STRICT JSON only using the schema required by the application.
+
+Module title:
+{module_title}
+
+Lesson content:
+{lesson_context}
+
+Question/answer pairs:
+{answers_payload}
+
+Retrieved curriculum context:
+{context}

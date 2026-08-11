@@ -45,7 +45,7 @@ class StreamlitLike(Protocol):
     def divider(self) -> None: ...
     def tabs(self, labels: list[str]) -> list[Any]: ...
     def container(self) -> Any: ...
-
+    def rerun(self) -> None: ...
 
 def _get_streamlit(st: StreamlitLike | None = None) -> StreamlitLike:
     """Return the provided Streamlit adapter or import the real library."""
@@ -274,6 +274,8 @@ def _render_learning_lesson(st: StreamlitLike, session: LearningSession) -> None
         st.error(f"Unable to generate the lesson: {exc}")
         return
 
+    session.current_lesson = lesson
+
     st.subheader("Learning Content")
     st.markdown(f"**{lesson.lesson_title}**")
     st.write(lesson.learning_content)
@@ -349,7 +351,8 @@ def _render_quiz_section(st: StreamlitLike, session: LearningSession, state: dic
 
     if st.button("Submit quiz"):
         try:
-            evaluation = evaluate_learning_quiz(quiz_bundle, answers)
+            lesson_content = session.current_lesson.learning_content if session.current_lesson is not None else ""
+            evaluation = evaluate_learning_quiz(quiz_bundle, lesson_content, answers)
             session.quiz_result = evaluation
             state["learning_quiz_result"] = evaluation
             st.success("Quiz submitted.")
@@ -374,13 +377,18 @@ def _render_quiz_section(st: StreamlitLike, session: LearningSession, state: dic
     if session.quiz_result is not None and session.quiz_result.passed:
         if st.button("Complete current module"):
             next_module = complete_current_module(session)
+
+            state.pop("learn_question", None)
             state.pop("learning_question_answer", None)
             state["learning_quiz_result"] = None
+
             for key in list(state):
                 if key.startswith("quiz_answer_"):
                     state.pop(key, None)
+
             if next_module is not None:
                 st.success(f"Advanced to {next_module.title}")
+                st.rerun()
             else:
                 st.success("You have completed the current curriculum path.")
 

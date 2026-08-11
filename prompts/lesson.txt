@@ -4,9 +4,10 @@ Your task is to create a high-quality educational lesson using ONLY the retrieve
 
 Do NOT use outside knowledge.
 Do NOT invent information.
+Do NOT use examples, scenarios, or facts that are not supported by the retrieved curriculum context.
 If the retrieved context does not support a topic, explicitly state that the available curriculum material does not provide enough information.
 
-Prefer explanatory paragraphs. Use bullet lists only when they improve readability, such as summarizing stages or terminology.
+Prefer explanatory paragraphs. Use bullet lists only when they improve readability, such as summarizing stages, terminology, or key distinctions.
 
 Do not assume prior knowledge. Explain new terminology the first time it appears, even if it seems obvious to an expert.
 
@@ -22,78 +23,97 @@ Requirements
 
 - The lesson is intended for self-paced learning.
 - Teach the topic instead of summarizing it.
-- Explain concepts clearly, logically, and progressively.
+- Explain concepts clearly, logically, progressively, and in enough depth to support later assessment.
 - Build the lesson only from the retrieved curriculum documents.
 - Do not mention citations, document names, or source titles.
 - Do not refer to "the retrieved context" or "the documents."
 - Every curriculum objective must be explicitly and thoroughly taught.
 - The learner should be able to answer conceptual, application, and integration questions after completing the lesson.
 
-For EACH curriculum objective, include whenever supported by the available material:
+For EACH curriculum objective, teach enough detail to support at least:
+- one conceptual question;
+- one application question.
 
-- a clear explanation of the concept;
+For each objective, explain whenever supported by the available material:
+
+- what the concept is;
 - important terminology and definitions;
-- relationships to other concepts in the module;
-- why the concept matters in drug development or regulatory science;
+- why the concept matters;
+- how it connects to other concepts in the module;
+- what happens before and after it in the relevant lifecycle, process, or framework;
 - practical implications;
-- at least one concrete example or realistic scenario.
+- at least one concrete example or realistic scenario supported by the curriculum context.
 
-Do not simply mention concepts such as stakeholder engagement, quality management, ethics, or regulatory review. Explain:
+Explicitly teach cause-and-effect relationships.
 
-- what they are;
+Do not simply state that something is important. Explain why it matters and what consequences or decisions follow from it.
+
+For concepts such as stakeholder engagement, quality management, ethics, regulatory review, safety monitoring, or clinical development, explain whenever relevant:
+
+- what the concept means;
 - who is involved;
-- why they matter;
-- when they are applied;
-- how they influence decisions, study design, product development, or regulatory outcomes.
+- when it applies;
+- why it matters;
+- how it affects decisions, study design, product development, participant protection, regulatory review, or lifecycle management.
 
 When describing processes or lifecycles:
 
-- explain the transition between stages;
-- explain what happens in each stage;
-- explain why the next stage follows;
+- explain each stage;
+- explain what information or decisions lead into the stage;
+- explain what happens during the stage;
+- explain what outputs or evidence come from it;
+- explain how those outputs influence the next stage;
 - emphasize cause-and-effect relationships rather than isolated facts.
 
-Whenever appropriate, compare concepts instead of listing them.
+Whenever appropriate, compare related concepts rather than listing them independently.
 
 The lesson should provide enough detail that a learner can answer:
-- conceptual questions ("What is...?")
-- application questions ("How would you...?")
-- integration questions ("How do these concepts work together?")
+
+- conceptual questions such as "What is this concept?"
+- application questions such as "How would this information affect the next step?"
+- integration questions such as "How do these concepts or stages work together?"
 
 Structure the learning_content as a coherent lesson with these sections whenever supported by the available material:
 
 1. Introduction
    - Explain why the topic matters.
    - Introduce the learning objectives.
-   - Briefly describe what the learner will understand after completing the lesson.
+   - Briefly explain what the learner should understand by the end.
 
 2. Main Concepts
    - Explain concepts in a logical progression.
-   - Introduce and define important terminology naturally.
+   - Define important terminology naturally.
    - Connect related concepts instead of presenting isolated definitions.
 
 3. Process / Lifecycle / Framework
-   - Explain each stage.
+   - Explain each relevant stage.
    - Explain transitions between stages.
-   - Highlight dependencies and relationships.
+   - Highlight dependencies, inputs, outputs, and cause-and-effect relationships.
 
 4. Key Stakeholders
-   - Explain who the stakeholders are.
+   - Explain who the relevant stakeholders are.
    - Describe their responsibilities.
-   - Explain how they interact throughout the process.
+   - Explain how they interact and influence the process.
 
 5. Practical Context
    - Show how the concepts are applied in real drug development or regulatory practice.
-   - Include realistic examples or scenarios supported by the curriculum material.
-   - Explain why these concepts are important in practice.
+   - Include realistic examples or scenarios only when supported by the curriculum context.
+   - Explain the reasoning behind practical decisions rather than merely describing them.
 
 6. Conclusion
    - Reinforce the most important concepts.
    - Connect them back to the learning objectives.
+   - Emphasize how the main concepts fit together.
+
+Before finalizing the lesson, verify internally that:
+- every curriculum objective has been explicitly taught;
+- every objective contains enough information for at least one conceptual and one application question;
+- important cause-and-effect relationships have been explained;
+- no example or scenario relies on unsupported outside knowledge.
 
 Length
 
-- Approximately 700–1200 words when the available context supports it.
+- Approximately 800–1200 words when the available context supports it.
 - Use the available context to determine the appropriate level of detail.
 - Be concise only if insufficient source material exists.
 - Prefer explanation over lists whenever possible.
@@ -103,6 +123,7 @@ Key Takeaways
 - Return 3–5 concise bullet points.
 - Focus on the most important learning outcomes.
 - Do not simply repeat section headings.
+- Include the relationships or decisions the learner should remember, not only definitions.
 
 Module title:
 {module_title}

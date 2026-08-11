@@ -1,25 +1,53 @@
 You are creating a knowledge check for a learner who has just completed a curriculum module and studied the lesson below.
 
-Use the lesson content as the primary basis for the questions.
-Use the retrieved curriculum context to validate and support the lesson, not to introduce new details.
+Use the generated lesson as the PRIMARY source for all questions.
+Treat the retrieved curriculum context only as grounding evidence and source traceability.
+
+Use the retrieved curriculum context ONLY to verify that the lesson is correctly grounded and that the reference answers are supported.
+Do NOT introduce concepts, terminology, examples, or details that were not explicitly taught in the lesson.
 Do NOT use outside knowledge.
 Do NOT invent facts.
-Do NOT ask questions that cannot be answered from the lesson and retrieved material.
 Do NOT reference document names, page numbers, quotations, or obscure procedural details.
 
-The quiz should test the curriculum objectives rather than arbitrary retrieved details.
+The quiz should assess understanding of the curriculum objectives rather than recall of isolated facts.
+
+Every question must be directly answerable from the lesson content.
+If a concept was not explicitly taught in the lesson, do not ask about it.
+
 Cover all curriculum objectives whenever possible.
-Prefer conceptual understanding over memorization.
 
-Aim for this distribution when possible:
-- 2 concept understanding questions
-- 2 application/scenario questions
-- 1 integration question
+Aim for this distribution when supported by the lesson:
 
-Each question must map to exactly one curriculum objective from the module objectives list.
-Each question must include source_chunk_ids that exist in the retrieved context only.
+Generate between 3 and 5 questions.
+Prefer 3 or 4 questions unless the lesson contains enough distinct concepts to justify 5.
+Every question should assess a different learning objective or a substantially different aspect of the lesson.
 
-Create exactly {question_count} questions unless the retrieved context is insufficient.
+Each question must map to exactly one curriculum objective.
+
+For the "objective" field:
+
+- Copy exactly one objective from the provided Learning objectives list.
+- Use the objective text verbatim.
+- Do not paraphrase it.
+- Do not combine multiple objectives.
+- Do not invent a broader or higher-level objective.
+
+Questions should progress from easier to more challenging.
+
+For every question:
+
+- the correct answer must be supported by a specific passage in the lesson;
+- the reference answer must be concise, complete, and grounded in both the lesson and retrieved context;
+
+Avoid questions that depend on incidental details from retrieved chunks that were not explained in the lesson.
+
+Application questions should require learners to apply concepts that were explicitly taught, not guess procedures or facts.
+
+Integration questions should connect concepts or stages that the lesson explicitly explained.
+
+Prefer fewer high-quality questions over weak or repetitive ones.
+If the lesson does not adequately support all requested questions, return fewer than {question_count} questions rather than generating unsupported questions.
+Prefer 3 to 5 strong questions when the lesson supports them, but return fewer if that is the highest-quality option.
 
 Return STRICT JSON only with this shape:
 
@@ -29,16 +57,10 @@ Return STRICT JSON only with this shape:
       "id": "q1",
       "question": "...",
       "objective": "...",
-      "reference_answer": "...",
-      "source_chunk_ids": ["..."]
+      "reference_answer": "..."
     }}
   ]
 }}
-
-Requirements:
-- Questions should become progressively more challenging.
-- Reference answers should be concise and grounded in the retrieved context.
-- If insufficient context exists, return fewer questions and keep every returned question grounded.
 
 Module title:
 {module_title}
