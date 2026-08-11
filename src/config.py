@@ -14,6 +14,10 @@ EMBEDDING_MODEL = os.getenv(
     "text-embedding-3-small"
 )
 
+# Cohere
+COHERE_API_KEY = os.getenv("COHERE_API_KEY")
+COHERE_RERANK_MODEL = os.getenv("COHERE_RERANK_MODEL", "rerank-v4.0-pro")
+
 # Pinecone
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX")

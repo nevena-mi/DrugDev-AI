@@ -1,0 +1,24 @@
+- id: gcp_definition
+  question: "What is Good Clinical Practice?"
+  expected_primary:
+    - "ICH E6(R3) Guideline for Good Clinical Practice"
+
+- id: quality_risk_management
+  question: "What is Quality Risk Management and what are its main principles?"
+  expected_primary:
+    - "ICH Q9 Quality Risk Management"
+
+- id: pharmacovigilance_planning
+  question: "What is pharmacovigilance planning?"
+  expected_primary:
+    - "ICH E2E Pharmacovigilance Planning"
+
+- id: ind
+  question: "What is the IND application?"
+  expected_primary:
+    - "Investigational New Drug (IND) Application"
+
+- id: eu_ai_act
+  question: "How does the EU AI Act affect AI systems used in healthcare?"
+  expected_primary:
+    - "Regulation (EU) 2024/1689 Artificial Intelligence Act"
