@@ -455,17 +455,41 @@ Return citations
 ---
 
 # 18. Monitor Workflow
-Scheduled job
+Monitor mode is manually triggered and API-first.
+
+User enters topic / keyword and optional filters
 ↓
-Retrieve new guidance
+Query official live sources:
+ClinicalTrials.gov
+openFDA
+EMA
 ↓
-Summarize
+Normalize results into a common MonitorItem model
 ↓
-Store
+Filter and sort recent regulatory signals
 ↓
-User asks
+Generate grounded AI summary when requested
 ↓
-Explain changes
+Display:
+- what changed
+- why it may matter
+- source
+- date
+- official link
+
+Monitor does not use Pinecone or the existing RAG retrieval pipeline for live updates.
+
+Future versions may add:
+
+Scheduled monitoring via n8n
+↓
+Detect new or changed regulatory information
+↓
+Store monitoring history
+↓
+Generate daily / weekly summaries
+↓
+Send alerts or notifications
 
 
 ---
@@ -486,6 +510,7 @@ Basic curriculum
 Onboarding
 Simple quizzes
 Streamlit interface
+Monitor mode
 
 ---
 

@@ -667,69 +667,158 @@ Status: ⬜
 
 ## Goal
 
-Implement regulatory intelligence functionality using the existing RAG infrastructure.
+Implement a live Regulatory Intelligence workspace that complements the existing **Ask** and **Learn** modes by providing recent developments from official regulatory sources.
 
-For the MVP, Monitor mode is manually triggered.
+Unlike Ask and Learn, which operate primarily on the curated RAG knowledge base, Monitor is **API-first** and focuses on current regulatory activity. Retrieved live information may subsequently be summarized and explained using the existing LLM infrastructure.
 
-Automated scheduled monitoring is a future extension.
+For the MVP, Monitor is manually triggered through the Streamlit interface. Automated scheduled monitoring remains a future extension.
+
+---
 
 ## Module
 
-src/monitor.py
+`src/monitor.py`
+
+Additional source adapters:
+
+- `src/monitor_sources/openfda.py`
+- `src/monitor_sources/clinical_trials.py`
+- `src/monitor_sources/ema.py`
+
+---
 
 ## Initial Scope
 
-Allow the user to inspect regulatory updates already available to the system and request summaries or explanations.
+Integrate three official live information sources:
 
-The workflow should reuse:
+- ClinicalTrials.gov
+- openFDA
+- EMA RSS (or equivalent official EMA update feed)
 
-* embeddings
-* Pinecone
-* retrieval
-* LangGraph generation
-* citations
+Each source should be implemented independently behind a common interface so additional agencies can be added without changing the Monitor workflow.
 
-## Flow
+---
 
-Regulatory update / document
+## Data Model
+
+Normalize all external results into a common `MonitorItem` model containing:
+
+- source
+- title
+- publication date
+- category/type
+- short description
+- official source URL
+- source-specific identifier
+
+The Streamlit UI must consume only the normalized model and remain independent of individual APIs.
+
+---
+
+## Workflow
+
+User enters:
+- topic or keyword
+- selected sources
+- optional recent time window
 ↓
-Retrieve relevant content
+Retrieve updates from selected official APIs
 ↓
-Summarize
+Normalize into `MonitorItem`
 ↓
-Explain significance
+Sort chronologically
 ↓
-Return citations
+(Optional) Filter locally without additional API calls
+↓
+Generate grounded AI summary explaining:
+- **What changed?**
+- **Why it may matter?**
+↓
+Display results with links to the official sources.
 
-## Future Extension
+---
 
-n8n may later:
+## AI Summaries
 
-* check EMA/FDA sources on a schedule
-* detect new documents
-* trigger ingestion
-* trigger summaries
-* send notifications
+The LLM should summarize only the retrieved API content.
 
-## Test
+It must:
 
-tests/test_monitor.py
+- avoid outside knowledge;
+- clearly distinguish facts from interpretation;
+- explain significance only when supported by the available information;
+- state when insufficient information is available.
+
+---
+
+## Streamlit UI
+
+Replace the Monitor placeholder with a functional interface containing:
+
+- topic/keyword search
+- source selection
+- optional time-window filter
+- **Fetch Updates** button
+- chronological signal feed
+- grounded AI summary
+- links to official source documents
+
+The interface should prioritize concise regulatory signals rather than raw API responses.
+
+---
+
+## Integration
+
+Monitor should reuse the existing project infrastructure where appropriate:
+
+- OpenAI client
+- prompt loading
+- structured outputs
+- logging
+- error handling
+
+It should **not** depend on Pinecone retrieval for current updates, although future versions may ingest retrieved updates into the knowledge base.
+
+A future enhancement may allow users to send a selected Monitor item directly to Ask mode for deeper explanation.
+
+---
+
+## Tests
+
+`tests/test_monitor.py`
 
 Verify:
 
-* update content can be retrieved
-* summaries are grounded
-* source citations are preserved
-* missing information is handled safely
+- API adapters normalize responses correctly
+- `MonitorItem` objects are constructed correctly
+- keyword filtering works
+- chronological ordering is correct
+- partial API failures do not stop the workflow
+- AI summaries remain grounded in retrieved API content
+- official source URLs are preserved
+- mocked APIs are used during unit tests
 
-## Streamlit
+---
 
-Replace the Monitor placeholder with the working Monitor interface.
+## Future Extension
+
+Future versions may introduce:
+
+- scheduled monitoring via n8n
+- automatic ingestion of new documents into the RAG corpus
+- daily or weekly summaries
+- email or Slack notifications
+- saved searches
+- watchlists
+- regulatory impact scoring
+- historical trend analysis
+- semantic search across stored regulatory updates
+
+---
 
 ## Deliverable
 
-Working manual Monitor mode.
-
+A working **Monitor** mode that retrieves live updates from official regulatory sources, presents them as normalized regulatory signals, explains their significance through grounded AI summaries, and integrates cleanly with the existing **Ask** and **Learn** architecture.
 ---
 
 # Phase 12 — Final Integration & MVP Validation

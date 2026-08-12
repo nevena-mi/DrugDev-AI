@@ -18,6 +18,9 @@ EMBEDDING_MODEL = os.getenv(
 COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 COHERE_RERANK_MODEL = os.getenv("COHERE_RERANK_MODEL", "rerank-v4.0-pro")
 
+# openFDA
+OPENFDA_API_KEY = os.getenv("OPENFDA_API_KEY")
+
 # Pinecone
 PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
 PINECONE_INDEX = os.getenv("PINECONE_INDEX")
