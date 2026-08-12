@@ -2,12 +2,20 @@
 
 from __future__ import annotations
 
+from datetime import date
 import logging
 from dataclasses import asdict, is_dataclass
 from typing import Any, Protocol
 
 from src.chatbot import ask_question
 from src.curriculum import get_module, list_modules, prerequisites_satisfied
+from src.monitor import (
+    MonitorResult,
+    deduplicate_monitor_items,
+    filter_monitor_items,
+    fetch_monitor_updates,
+    sort_monitor_items_newest_first,
+)
 from src.graph import (
     LearningAnswer,
     LearningSession,
@@ -37,6 +45,7 @@ class StreamlitLike(Protocol):
     def subheader(self, text: str) -> None: ...
     def text_input(self, label: str, value: str = "", placeholder: str = "") -> str: ...
     def text_area(self, label: str, value: str = "", placeholder: str = "") -> str: ...
+    def checkbox(self, label: str, value: bool = False) -> bool: ...
     def button(self, label: str) -> bool: ...
     def error(self, text: str) -> None: ...
     def success(self, text: str) -> None: ...
@@ -79,6 +88,17 @@ def _render_placeholder(st: StreamlitLike, title: str) -> None:
     st.info("This mode will be implemented in a later phase.")
 
 
+def _make_monitor_result(items: list[Any], *, topic: str, selected_sources: list[str], source_errors: list[Any]) -> MonitorResult:
+    """Build a session-friendly MonitorResult for local filtering and rendering."""
+
+    return MonitorResult(
+        topic=topic,
+        selected_sources=selected_sources,
+        items=list(items),
+        source_errors=list(source_errors),
+    )
+
+
 def _render_citation_block(st: StreamlitLike, citations: list[Any]) -> None:
     """Render unique document titles for the current answer."""
 
@@ -118,6 +138,28 @@ def _render_document_titles(st: StreamlitLike, citations: list[Any]) -> None:
 
         seen_titles.add(title)
         st.markdown(f"- {title}")
+
+
+def _render_monitor_item_card(st: StreamlitLike, item: Any) -> None:
+    """Render one normalized Monitor signal."""
+
+    source = str(_to_mapping(item).get("source", "")).strip()
+    title = str(_to_mapping(item).get("title", "")).strip()
+    published_date = _to_mapping(item).get("published_date")
+    category = str(_to_mapping(item).get("category", "")).strip()
+    description = str(_to_mapping(item).get("description", "")).strip()
+    url = str(_to_mapping(item).get("url", "")).strip()
+
+    st.markdown(f"**{title or 'Untitled signal'}**")
+    if source or published_date or category:
+        pieces = [piece for piece in [source, published_date.isoformat() if hasattr(published_date, "isoformat") else str(published_date) if published_date else "", category] if piece]
+        if pieces:
+            st.markdown(" · ".join(pieces))
+    if description:
+        st.write(description)
+    if url:
+        st.markdown(f"[Official source]({url})")
+    st.markdown("")
 
 
 def _render_answer_block(st: StreamlitLike, heading: str, answer: LearningAnswer | None) -> None:
@@ -176,6 +218,167 @@ def _render_ask_tab(st: StreamlitLike, ask_fn=ask_question) -> None:
     st.subheader("Answer")
     st.write(result.answer)
     _render_citation_block(st, list(result.citations))
+
+
+def _parse_monitor_date(value: str) -> date | None:
+    """Parse a YYYY-MM-DD monitor date input."""
+
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        raise ValueError("Enter a valid date in YYYY-MM-DD format or leave it blank.")
+
+
+def _render_monitor_summary(st: StreamlitLike, result: MonitorResult) -> None:
+    """Render a compact summary and the live feed."""
+
+    st.subheader("Monitor Summary")
+    st.markdown(f"**Searched topic:** {result.topic}")
+    st.markdown(
+        f"**Selected sources:** {', '.join(result.selected_sources) if result.selected_sources else 'None'}"
+    )
+    st.markdown(f"**Returned items:** {len(result.items)}")
+    if result.source_errors:
+        st.subheader("Source Warnings")
+        for source_error in result.source_errors:
+            message = f"{source_error.source}: {source_error.error}"
+            if source_error.detail:
+                message = f"{message} - {source_error.detail}"
+            st.warning(message)
+
+
+def _render_monitor_results(
+    st: StreamlitLike,
+    result: MonitorResult,
+    *,
+    source_filter: dict[str, bool],
+    keyword_filter: str,
+) -> None:
+    """Render locally filtered Monitor results."""
+
+    active_sources = {source for source, enabled in source_filter.items() if enabled}
+    items = list(result.items)
+    if active_sources:
+        items = [item for item in items if _to_mapping(item).get("source") in active_sources]
+    if keyword_filter.strip():
+        items = filter_monitor_items(items, keyword_filter.strip())
+
+    items = deduplicate_monitor_items(items)
+    items = sort_monitor_items_newest_first(items)
+
+    if not items:
+        st.info("No signals matched the current local filters.")
+        return
+
+    st.subheader("Signal Feed")
+    for item in items:
+        _render_monitor_item_card(st, item)
+
+
+def _render_monitor_tab(st: StreamlitLike) -> None:
+    """Render the functional Monitor tab."""
+
+    state = _get_session_state(st)
+
+    st.title("Monitor")
+    st.markdown("Track recent regulatory signals from live external sources.")
+
+    topic = st.text_input(
+        "Topic or keyword",
+        value=state.get("monitor_topic", ""),
+        placeholder="e.g. pharmacovigilance, clinical trials, AI",
+    )
+    state["monitor_topic"] = topic
+
+    st.subheader("Sources")
+    source_options = ["ClinicalTrials.gov", "openFDA", "EMA"]
+    source_selection = {
+        source_name: st.checkbox(source_name, value=state.get(f"monitor_source_{source_name}", True))
+        for source_name in source_options
+    }
+    for source_name, enabled in source_selection.items():
+        state[f"monitor_source_{source_name}"] = enabled
+
+    published_after_text = st.text_input(
+        "Published after (YYYY-MM-DD, optional)",
+        value=state.get("monitor_published_after", ""),
+        placeholder="e.g. 2026-01-01",
+    )
+    state["monitor_published_after"] = published_after_text
+
+    per_source_limit_text = st.text_input(
+        "Per-source limit",
+        value=str(state.get("monitor_per_source_limit", 5)),
+        placeholder="5",
+    )
+    state["monitor_per_source_limit"] = per_source_limit_text
+
+    if st.button("Fetch Updates"):
+        selected_sources = [source_name for source_name, enabled in source_selection.items() if enabled]
+        if not topic.strip():
+            st.warning("Enter a topic before fetching updates.")
+        elif not selected_sources:
+            st.warning("Select at least one source before fetching updates.")
+        else:
+            try:
+                published_after = _parse_monitor_date(published_after_text)
+            except ValueError as exc:
+                st.warning(str(exc))
+            else:
+                try:
+                    per_source_limit = int(per_source_limit_text.strip())
+                except ValueError:
+                    st.warning("Per-source limit must be a positive integer.")
+                else:
+                    try:
+                        result = fetch_monitor_updates(
+                            topic.strip(),
+                            selected_sources=selected_sources,
+                            published_after=published_after,
+                            per_source_limit=per_source_limit,
+                            final_limit=per_source_limit,
+                        )
+                        state["monitor_result"] = result
+                        state["monitor_source_filter"] = {source_name: True for source_name in selected_sources}
+                        state["monitor_keyword_filter"] = ""
+                    except Exception as exc:  # pragma: no cover - exercised in manual runtime
+                        logger.exception("Monitor fetch failed")
+                        st.error(f"Unable to fetch monitor updates: {exc}")
+
+    result = state.get("monitor_result")
+    if not isinstance(result, MonitorResult):
+        st.info("Fetch updates to view recent regulatory signals.")
+        return
+
+    _render_monitor_summary(st, result)
+
+    st.subheader("Local Filters")
+    filter_state = state.setdefault(
+        "monitor_source_filter",
+        {source_name: True for source_name in source_options},
+    )
+    for source_name in source_options:
+        filter_state[source_name] = st.checkbox(
+            f"Show {source_name}",
+            value=filter_state.get(source_name, True),
+        )
+
+    keyword_filter = st.text_input(
+        "Keyword filter (optional)",
+        value=state.get("monitor_keyword_filter", ""),
+        placeholder="Filter already loaded results",
+    )
+    state["monitor_keyword_filter"] = keyword_filter
+
+    _render_monitor_results(
+        st,
+        result,
+        source_filter=filter_state,
+        keyword_filter=keyword_filter,
+    )
 
 
 def _render_onboarding_form(st: StreamlitLike, state: dict[str, Any]) -> None:
@@ -457,7 +660,7 @@ def main(st: StreamlitLike | None = None, *, ask_fn=ask_question) -> None:
         _render_learn_tab(ui)
 
     with monitor_tab:
-        _render_placeholder(ui, "Monitor")
+        _render_monitor_tab(ui)
 
 
 if __name__ == "__main__":  # pragma: no cover - manual execution only

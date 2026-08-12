@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import src.app as app_module
+import src.monitor as monitor_module
 
 
 @dataclass
@@ -25,12 +26,14 @@ class FakeStreamlit:
         question: str = "",
         text_inputs: dict[str, str] | None = None,
         text_areas: dict[str, str] | None = None,
+        checkboxes: dict[str, bool] | None = None,
         buttons: dict[str, bool] | None = None,
         session_state: dict[str, object] | None = None,
     ) -> None:
         self.question = question
         self.text_inputs = text_inputs or {}
         self.text_areas = text_areas or {}
+        self.checkboxes = checkboxes or {}
         self.buttons = buttons or {}
         self.session_state = session_state or {}
         self.calls: list[tuple[str, object]] = []
@@ -60,6 +63,10 @@ class FakeStreamlit:
     def text_area(self, label: str, value: str = "", placeholder: str = "") -> str:
         self.calls.append(("text_area", (label, value, placeholder)))
         return self.text_areas.get(label, value)
+
+    def checkbox(self, label: str, value: bool = False) -> bool:
+        self.calls.append(("checkbox", (label, value)))
+        return self.checkboxes.get(label, value)
 
     def button(self, label: str) -> bool:
         self.calls.append(("button", label))
@@ -309,3 +316,115 @@ def test_main_handles_backend_errors_gracefully() -> None:
     app_module.main(fake_streamlit, ask_fn=failing_ask_question)
 
     assert any(call[0] == "error" and "Unable to answer the question" in call[1] for call in fake_streamlit.calls)
+
+
+def test_main_renders_monitor_tab_and_calls_orchestrator() -> None:
+    fake_monitor_result = app_module.MonitorResult(
+        topic="pharmacovigilance",
+        selected_sources=["ClinicalTrials.gov", "EMA"],
+        items=[
+            monitor_module.MonitorItem(
+                source="EMA",
+                title="EMA update",
+                published_date=None,
+                category="EMA News",
+                description="EMA summary",
+                url="https://example.com/ema",
+                source_id="ema-1",
+            ),
+            monitor_module.MonitorItem(
+                source="ClinicalTrials.gov",
+                title="CT update",
+                published_date=None,
+                category="INTERVENTIONAL | RECRUITING",
+                description="CT summary",
+                url="https://example.com/ct",
+                source_id="ct-1",
+            ),
+            ],
+            source_errors=[
+                monitor_module.MonitorSourceError(source="openFDA", error="timeout", detail="openFDA unavailable"),
+            ],
+        )
+    fake_streamlit = FakeStreamlit(
+        session_state={},
+        text_inputs={
+            "Topic or keyword": "pharmacovigilance",
+            "Published after (YYYY-MM-DD, optional)": "2026-08-01",
+            "Per-source limit": "3",
+            "Keyword filter (optional)": "",
+        },
+        checkboxes={
+            "ClinicalTrials.gov": True,
+            "openFDA": False,
+            "EMA": True,
+            "Show ClinicalTrials.gov": True,
+            "Show openFDA": False,
+            "Show EMA": True,
+        },
+        buttons={"Fetch Updates": True},
+    )
+
+    with patch.object(app_module, "fetch_monitor_updates", return_value=fake_monitor_result) as fetch_updates:
+        app_module.main(fake_streamlit, ask_fn=lambda question: SimpleNamespace(answer="", citations=[]))
+
+    assert fetch_updates.call_count == 1
+    assert fetch_updates.call_args.args[0] == "pharmacovigilance"
+    assert fetch_updates.call_args.kwargs["selected_sources"] == ["ClinicalTrials.gov", "EMA"]
+    assert fetch_updates.call_args.kwargs["per_source_limit"] == 3
+    assert fetch_updates.call_args.kwargs["final_limit"] == 3
+    assert fake_streamlit.session_state["monitor_result"] is fake_monitor_result
+    assert any(call[0] == "subheader" and call[1] == "Monitor Summary" for call in fake_streamlit.calls)
+    assert any(call[0] == "warning" and "openFDA: timeout" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "subheader" and call[1] == "Signal Feed" for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "**EMA update**" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "[Official source](https://example.com/ema)" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "**CT update**" in call[1] for call in fake_streamlit.calls)
+
+
+def test_main_uses_session_state_monitor_result_without_refetching() -> None:
+    fake_monitor_result = app_module.MonitorResult(
+        topic="topic",
+        selected_sources=["EMA"],
+        items=[
+            monitor_module.MonitorItem(
+                source="EMA",
+                title="EMA item",
+                published_date=None,
+                category="EMA News",
+                description="EMA summary",
+                url="https://example.com/ema",
+                source_id="ema-1",
+            )
+        ],
+        source_errors=[],
+    )
+    fake_streamlit = FakeStreamlit(
+        session_state={
+            "monitor_result": fake_monitor_result,
+            "monitor_source_filter": {"ClinicalTrials.gov": False, "openFDA": False, "EMA": True},
+            "monitor_keyword_filter": "",
+        },
+        text_inputs={
+            "Topic or keyword": "topic",
+            "Published after (YYYY-MM-DD, optional)": "",
+            "Per-source limit": "3",
+            "Keyword filter (optional)": "nonmatching",
+        },
+        checkboxes={
+            "ClinicalTrials.gov": True,
+            "openFDA": False,
+            "EMA": True,
+            "Show ClinicalTrials.gov": False,
+            "Show openFDA": False,
+            "Show EMA": True,
+        },
+        buttons={"Fetch Updates": False},
+    )
+
+    with patch.object(app_module, "fetch_monitor_updates") as fetch_updates:
+        app_module.main(fake_streamlit, ask_fn=lambda question: SimpleNamespace(answer="", citations=[]))
+
+    assert fetch_updates.call_count == 0
+    assert any(call[0] == "subheader" and call[1] == "Monitor Summary" for call in fake_streamlit.calls)
+    assert any(call[0] == "info" and "No signals matched the current local filters." in call[1] for call in fake_streamlit.calls)
