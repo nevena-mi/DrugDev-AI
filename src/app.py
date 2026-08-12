@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from datetime import date
+import html
 import logging
 from dataclasses import asdict, is_dataclass
+from textwrap import shorten
 from typing import Any, Protocol
 
 from src.chatbot import ask_question
@@ -40,13 +42,13 @@ class StreamlitLike(Protocol):
 
     def set_page_config(self, **kwargs: Any) -> None: ...
     def title(self, text: str) -> None: ...
-    def markdown(self, text: str) -> None: ...
+    def markdown(self, text: str, **kwargs: Any) -> None: ...
     def write(self, value: Any) -> None: ...
     def subheader(self, text: str) -> None: ...
     def text_input(self, label: str, value: str = "", placeholder: str = "") -> str: ...
     def text_area(self, label: str, value: str = "", placeholder: str = "") -> str: ...
     def checkbox(self, label: str, value: bool = False) -> bool: ...
-    def button(self, label: str) -> bool: ...
+    def button(self, label: str, key: str | None = None) -> bool: ...
     def error(self, text: str) -> None: ...
     def success(self, text: str) -> None: ...
     def info(self, text: str) -> None: ...
@@ -79,6 +81,99 @@ def _get_session_state(st: StreamlitLike) -> dict[str, Any]:
     if state is None:
         raise RuntimeError("Streamlit session_state is not available")
     return state
+
+
+def _apply_app_layout(st: StreamlitLike) -> None:
+    """Apply the shared centered content width and lightweight visual polish."""
+
+    st.markdown(
+        """
+        <style>
+            .block-container {
+                max-width: 980px;
+                margin: 0 auto;
+                padding-left: 1rem;
+                padding-right: 1rem;
+            }
+
+            .monitor-item-meta {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+                align-items: center;
+                margin-bottom: 0.35rem;
+            }
+
+            .monitor-source-badge {
+                display: inline-flex;
+                align-items: center;
+                border-radius: 999px;
+                padding: 0.15rem 0.65rem;
+                font-size: 0.78rem;
+                line-height: 1.25;
+                border: 1px solid rgba(120, 120, 120, 0.18);
+                background: rgba(120, 120, 120, 0.08);
+                color: inherit;
+                white-space: nowrap;
+            }
+
+            .monitor-source-badge--clinicaltrials {
+                background: rgba(58, 111, 214, 0.10);
+                border-color: rgba(58, 111, 214, 0.22);
+            }
+
+            .monitor-source-badge--openfda {
+                background: rgba(33, 150, 83, 0.10);
+                border-color: rgba(33, 150, 83, 0.22);
+            }
+
+            .monitor-source-badge--ema {
+                background: rgba(108, 117, 125, 0.10);
+                border-color: rgba(108, 117, 125, 0.22);
+            }
+
+            .monitor-item-description-toggle {
+                margin-top: 0.25rem;
+            }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _slugify_token(value: str) -> str:
+    """Return a stable slug suitable for Streamlit keys and CSS classes."""
+
+    token = "".join(character.lower() if character.isalnum() else "_" for character in value.strip())
+    token = "_".join(part for part in token.split("_") if part)
+    return token or "item"
+
+
+def _monitor_source_badge_class(source: str) -> str:
+    """Return the CSS class suffix for a Monitor source badge."""
+
+    source_key = source.strip().lower()
+    if source_key == "clinicaltrials.gov":
+        return "clinicaltrials"
+    if source_key == "openfda":
+        return "openfda"
+    if source_key == "ema":
+        return "ema"
+    return "default"
+
+
+def _monitor_description_state_key(item: Any) -> str:
+    """Build a stable session key for a Monitor item's description state."""
+
+    mapping = _to_mapping(item)
+    source = str(mapping.get("source", "")).strip()
+    source_id = str(mapping.get("source_id", "")).strip()
+    title = str(mapping.get("title", "")).strip()
+    return "monitor_description:{source}:{source_id}:{title}".format(
+        source=_slugify_token(source),
+        source_id=_slugify_token(source_id),
+        title=_slugify_token(title),
+    )
 
 
 def _render_placeholder(st: StreamlitLike, title: str) -> None:
@@ -143,20 +238,49 @@ def _render_document_titles(st: StreamlitLike, citations: list[Any]) -> None:
 def _render_monitor_item_card(st: StreamlitLike, item: Any) -> None:
     """Render one normalized Monitor signal."""
 
-    source = str(_to_mapping(item).get("source", "")).strip()
-    title = str(_to_mapping(item).get("title", "")).strip()
-    published_date = _to_mapping(item).get("published_date")
-    category = str(_to_mapping(item).get("category", "")).strip()
-    description = str(_to_mapping(item).get("description", "")).strip()
-    url = str(_to_mapping(item).get("url", "")).strip()
+    mapping = _to_mapping(item)
+    source = str(mapping.get("source", "")).strip()
+    title = str(mapping.get("title", "")).strip()
+    published_date = mapping.get("published_date")
+    category = str(mapping.get("category", "")).strip()
+    description = str(mapping.get("description", "")).strip()
+    url = str(mapping.get("url", "")).strip()
 
     st.markdown(f"**{title or 'Untitled signal'}**")
-    if source or published_date or category:
-        pieces = [piece for piece in [source, published_date.isoformat() if hasattr(published_date, "isoformat") else str(published_date) if published_date else "", category] if piece]
-        if pieces:
-            st.markdown(" · ".join(pieces))
+    meta_pieces: list[str] = []
+    if source:
+        source_badge = (
+            f'<span class="monitor-source-badge monitor-source-badge--{_monitor_source_badge_class(source)}">'
+            f"{html.escape(source)}"
+            "</span>"
+        )
+        meta_pieces.append(source_badge)
+    if published_date:
+        date_text = published_date.isoformat() if hasattr(published_date, "isoformat") else str(published_date)
+        if date_text:
+            meta_pieces.append(html.escape(date_text))
+    if category:
+        meta_pieces.append(html.escape(category))
+    if meta_pieces:
+        st.markdown(f'<div class="monitor-item-meta">{" · ".join(meta_pieces)}</div>', unsafe_allow_html=True)
+
     if description:
-        st.write(description)
+        state_key = _monitor_description_state_key(item)
+        description_threshold = 260
+        if len(description) <= description_threshold:
+            st.write(description)
+        else:
+            state = _get_session_state(st)
+            expanded = bool(state.setdefault(state_key, True))
+            if expanded:
+                st.write(description)
+                if st.button("Collapse", key=f"{state_key}:collapse"):
+                    state[state_key] = False
+            else:
+                preview = shorten(description, width=description_threshold, placeholder="…")
+                st.write(preview)
+                if st.button("Show more", key=f"{state_key}:expand"):
+                    state[state_key] = True
     if url:
         st.markdown(f"[Official source]({url})")
     st.markdown("")
@@ -647,6 +771,7 @@ def main(st: StreamlitLike | None = None, *, ask_fn=ask_question) -> None:
 
     ui = _get_streamlit(st)
     ui.set_page_config(page_title="DrugDev AI", page_icon="📚", layout="wide")
+    _apply_app_layout(ui)
 
     ui.title("DrugDev AI")
     ui.markdown("A regulatory science assistant for grounded Ask-mode question answering.")

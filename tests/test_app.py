@@ -45,7 +45,7 @@ class FakeStreamlit:
     def title(self, text: str) -> None:
         self.calls.append(("title", text))
 
-    def markdown(self, text: str) -> None:
+    def markdown(self, text: str, **kwargs) -> None:
         self.calls.append(("markdown", text))
 
     def write(self, value) -> None:
@@ -68,9 +68,10 @@ class FakeStreamlit:
         self.calls.append(("checkbox", (label, value)))
         return self.checkboxes.get(label, value)
 
-    def button(self, label: str) -> bool:
-        self.calls.append(("button", label))
-        return self.buttons.get(label, False)
+    def button(self, label: str, key: str | None = None) -> bool:
+        self.calls.append(("button", (label, key)))
+        lookup_key = key if key is not None else label
+        return self.buttons.get(lookup_key, False)
 
     def error(self, text: str) -> None:
         self.calls.append(("error", text))
@@ -98,6 +99,20 @@ class FakeStreamlit:
 
 def test_app_imports_cleanly() -> None:
     assert hasattr(app_module, "main")
+
+
+def test_main_applies_shared_content_width_shell() -> None:
+    fake_streamlit = FakeStreamlit(
+        question="What is GCP?",
+        buttons={"Ask": True},
+    )
+
+    app_module.main(fake_streamlit, ask_fn=lambda question: SimpleNamespace(answer="ok", citations=[]))
+
+    assert any(
+        call[0] == "markdown" and "max-width: 980px" in call[1] and ".block-container" in call[1]
+        for call in fake_streamlit.calls
+    )
 
 
 def test_main_renders_ask_and_title_only_citations() -> None:
@@ -378,6 +393,7 @@ def test_main_renders_monitor_tab_and_calls_orchestrator() -> None:
     assert any(call[0] == "warning" and "openFDA: timeout" in call[1] for call in fake_streamlit.calls)
     assert any(call[0] == "subheader" and call[1] == "Signal Feed" for call in fake_streamlit.calls)
     assert any(call[0] == "markdown" and "**EMA update**" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "markdown" and "monitor-source-badge--ema" in call[1] for call in fake_streamlit.calls)
     assert any(call[0] == "markdown" and "[Official source](https://example.com/ema)" in call[1] for call in fake_streamlit.calls)
     assert any(call[0] == "markdown" and "**CT update**" in call[1] for call in fake_streamlit.calls)
 
@@ -428,3 +444,61 @@ def test_main_uses_session_state_monitor_result_without_refetching() -> None:
     assert fetch_updates.call_count == 0
     assert any(call[0] == "subheader" and call[1] == "Monitor Summary" for call in fake_streamlit.calls)
     assert any(call[0] == "info" and "No signals matched the current local filters." in call[1] for call in fake_streamlit.calls)
+
+
+def test_monitor_item_card_renders_badge_and_collapsible_description() -> None:
+    long_description = " ".join(["Long description"] * 30)
+    item = monitor_module.MonitorItem(
+        source="ClinicalTrials.gov",
+        title="Study update",
+        published_date=None,
+        category="INTERVENTIONAL | RECRUITING",
+        description=long_description,
+        url="https://example.com/study",
+        source_id="NCT12345678",
+    )
+    fake_streamlit = FakeStreamlit(session_state={})
+
+    app_module._render_monitor_item_card(fake_streamlit, item)
+
+    state_key = app_module._monitor_description_state_key(item)
+    assert fake_streamlit.session_state[state_key] is True
+    assert any(call[0] == "markdown" and "monitor-source-badge--clinicaltrials" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "write" and long_description in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "button" and call[1] == ("Collapse", f"{state_key}:collapse") for call in fake_streamlit.calls)
+
+
+def test_monitor_item_card_collapsed_preview_keeps_short_descriptions_visible() -> None:
+    short_description = "Short summary of the signal."
+    long_description = " ".join(["Long description"] * 30)
+    long_item = monitor_module.MonitorItem(
+        source="EMA",
+        title="EMA item",
+        published_date=None,
+        category="EMA News",
+        description=long_description,
+        url="https://example.com/ema",
+        source_id="ema-1",
+    )
+    short_item = monitor_module.MonitorItem(
+        source="openFDA",
+        title="openFDA item",
+        published_date=None,
+        category="Drug Adverse Event",
+        description=short_description,
+        url="https://example.com/openfda",
+        source_id="fda-1",
+    )
+
+    long_state_key = app_module._monitor_description_state_key(long_item)
+    fake_streamlit = FakeStreamlit(
+        session_state={long_state_key: False},
+        buttons={f"{long_state_key}:expand": True},
+    )
+
+    app_module._render_monitor_item_card(fake_streamlit, long_item)
+    app_module._render_monitor_item_card(fake_streamlit, short_item)
+
+    assert any(call[0] == "write" and "Long description Long description" in call[1] and "…" in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "write" and short_description == call[1] for call in fake_streamlit.calls)
+    assert not any(call[0] == "button" and call[1][0] == "Collapse" and call[1][1] == f"{long_state_key}:collapse" for call in fake_streamlit.calls)
