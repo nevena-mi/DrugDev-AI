@@ -1,157 +1,250 @@
 # DrugDev-AI
 
-**DrugDev-AI** is an AI-powered educational and regulatory assistant for pharmaceutical drug development. It combines Retrieval-Augmented Generation (RAG), structured learning, semantic search, and AI-assisted question answering to provide grounded information from authoritative regulatory sources.
+**DrugDev-AI** is an AI-powered assistant for pharmaceutical drug development and regulatory science. It combines Retrieval-Augmented Generation (RAG), structured learning, semantic search, neural reranking, and live regulatory monitoring into a single application.
 
-The project was developed as part of the Ironhack AI Engineering Bootcamp.
+Developed as the project for the **Ironhack AI Consulting Bootcamp**, the project demonstrates how modern AI workflows can support professionals and students throughout the drug development lifecycle. :contentReference[oaicite:0]{index=0}
+
+---
+
+# Highlights
+
+- Three integrated workflows:
+  - **Ask** — grounded regulatory Q&A
+  - **Learn** — structured AI-assisted learning
+  - **Monitor** — live regulatory intelligence
+- Retrieval-Augmented Generation using authoritative regulatory documents
+- Two-stage retrieval with semantic search and neural reranking
+- AI-generated lessons and objective-based quizzes
+- Live monitoring from multiple regulatory sources
+- End-to-end tested with `pytest`
 
 ---
 
-# Features
-
-## Learn Mode
-
-An interactive curriculum covering major areas of pharmaceutical development:
-
-* Drug Development Fundamentals
-* Regulatory Landscape
-* Clinical Trials
-* Marketing Authorization
-* Pharmaceutical Quality Systems
-* Pharmacovigilance
-* Emerging Topics
-
-Each module provides:
-
-* AI-generated learning lessons grounded in regulatory documents
-* Learning objectives
-* Module-specific Q&A
-* Automatically generated quizzes
-* Progress tracking
-
----
+# Application Modes
 
 ## Ask Mode
 
-Ask natural-language questions about pharmaceutical development and regulatory science.
+Ask natural-language questions about pharmaceutical development, clinical trials, quality systems, pharmacovigilance, regulatory affairs, and related topics.
 
-Answers are generated using Retrieval-Augmented Generation (RAG) and are grounded in authoritative regulatory documents rather than model memory alone.
+Features:
 
-Each answer includes document citations to improve transparency and traceability.
-
----
-
-## Monitor Mode *(in progress)*
-
-Planned functionality includes monitoring regulatory developments using external APIs, including:
-
-* openFDA
-* ClinicalTrials.gov
-* EMA news and updates
+- Retrieval-Augmented Generation (RAG)
+- Semantic retrieval using Pinecone
+- Neural reranking using Cohere
+- Grounded responses using the OpenAI Responses API
+- Source citations for transparency and traceability
+- Persistent conversation state within the application
 
 ---
 
-# Architecture
+## Learn Mode
+
+Learn Mode provides a structured curriculum covering the major areas of pharmaceutical development.
+
+Current curriculum includes:
+
+- Drug Development Fundamentals
+- Regulatory Landscape
+- Clinical Trials
+- Marketing Authorization
+- Pharmaceutical Quality Systems
+- Pharmacovigilance
+- Emerging Topics
+
+Each module includes:
+
+- AI-generated lessons grounded in regulatory documents
+- Clearly defined learning objectives
+- Module-specific Q&A
+- Automatically generated quizzes
+- Concept-based quiz evaluation
+- Progress tracking
+- Module progression
+
+Lessons are generated first and quizzes are created directly from the generated lesson, ensuring assessment matches the taught material.
+
+---
+
+## Monitor Mode
+
+Monitor Mode aggregates recent regulatory developments from multiple authoritative external sources.
+
+Currently supported:
+
+- ClinicalTrials.gov
+- openFDA
+- European Medicines Agency (EMA)
+
+Features:
+
+- Live retrieval from external APIs/RSS
+- Unified normalized data model
+- Cross-source orchestration
+- Partial failure handling
+- Source-specific filtering
+- Local keyword filtering
+- Newest-first ranking
+- Deduplication across sources
+
+Monitor is intentionally independent from the RAG pipeline and retrieves live information directly from official sources.
+
+---
+
+# System Architecture
+
+DrugDev-AI consists of three complementary workflows.
+
+## Ask
 
 ```text
-User
-   │
-   ▼
 Question
-   │
-   ▼
-OpenAI Embedding
-   │
-   ▼
+      │
+      ▼
+OpenAI Embeddings
+      │
+      ▼
 Pinecone Vector Database
+      │
+      ▼
+Top-k Retrieval
+      │
+      ▼
+Cohere Rerank
+      │
+      ▼
+Grounded OpenAI Response
+```
+
+## Learn
+
+```text
+Curriculum Module
+        │
+        ▼
+Retrieve Module Context
+        │
+        ▼
+Generate Lesson
+        │
+        ▼
+Generate Quiz
+        │
+        ▼
+Evaluate Answers
+        │
+        ▼
+Progress Tracking
+```
+
+## Monitor
+
+```text
+Topic
    │
    ▼
-Top 15 Retrieved Chunks
+ClinicalTrials.gov
+openFDA
+EMA RSS
    │
    ▼
-Cohere Reranker
+Normalization
    │
    ▼
-Top 5 Relevant Chunks
+Monitor Orchestrator
    │
    ▼
-OpenAI Responses API
-   │
-   ▼
-Grounded Answer
+Unified Monitor Feed
 ```
 
 ---
 
 # Knowledge Base
 
-The system currently indexes **37 regulatory and scientific documents** from major international organizations, including:
+The RAG knowledge base contains regulatory and scientific documents from major international organizations, including:
 
-* ICH
-* EMA
-* FDA
-* WHO
-* European Union
-* WMA
-* GVP
+- ICH
+- FDA
+- EMA
+- WHO
+- European Union
+- WMA
+- GVP
 
 Topics include:
 
-* Good Clinical Practice
-* Clinical Trials
-* Pharmacovigilance
-* Pharmaceutical Quality Systems
-* Marketing Authorization
-* Quality Risk Management
-* Artificial Intelligence in Healthcare
-* EU Pharmaceutical Regulation
+- Drug Development
+- Clinical Trials
+- Good Clinical Practice
+- Pharmacovigilance
+- Pharmaceutical Quality Systems
+- Marketing Authorization
+- Quality Risk Management
+- Artificial Intelligence in Healthcare
+- EU Pharmaceutical Regulation
 
-The corpus contains approximately **6,645 vectorized text chunks** stored in Pinecone.
+The corpus currently contains approximately **6,600+ vectorized text chunks** stored in Pinecone. :contentReference[oaicite:1]{index=1}
 
 ---
 
 # Technology Stack
 
-* Python
-* Streamlit
-* OpenAI Responses API
-* OpenAI Embeddings
-* Pinecone
-* Cohere Rerank
-* PyPDF
-* YAML
-* pytest
+## AI
+
+- OpenAI Responses API
+- OpenAI Embeddings
+- Cohere Rerank
+
+## Retrieval
+
+- Pinecone Vector Database
+
+## Live Monitoring
+
+- ClinicalTrials.gov API v2
+- openFDA API
+- EMA RSS feeds
+
+## Application
+
+- Python
+- Streamlit
+- PyPDF
+- YAML
+
+## Testing
+
+- pytest
 
 ---
 
 # Retrieval Pipeline
 
-The application uses a two-stage retrieval architecture:
+DrugDev-AI uses a two-stage retrieval pipeline.
 
-1. Semantic retrieval using Pinecone.
-2. Neural reranking using Cohere.
-3. Grounded response generation using OpenAI.
+1. Semantic retrieval from Pinecone
+2. Neural reranking with Cohere
+3. Grounded answer generation with OpenAI
 
-This improves ranking precision while preserving semantic recall.
+Separating retrieval from reranking improves ranking precision while maintaining semantic recall.
 
 ---
 
 # Retrieval Evaluation
 
-Retrieval quality was evaluated using a fixed benchmark of representative regulatory questions before and after introducing Cohere reranking.
+Retrieval quality was evaluated before and after introducing neural reranking.
 
-| Metric                     | Baseline | Reranked |
-| -------------------------- | -------: | -------: |
-| Hit@1                      |     0.40 | **0.80** |
-| Hit@3                      |     0.80 |     0.80 |
-| Hit@5                      |     0.80 |     0.80 |
-| Mean Reciprocal Rank (MRR) |     0.60 | **0.80** |
+| Metric | Baseline | Reranked |
+|---------|---------:|---------:|
+| Hit@1 | 0.40 | **0.80** |
+| Hit@3 | 0.80 | 0.80 |
+| Hit@5 | 0.80 | 0.80 |
+| Mean Reciprocal Rank | 0.60 | **0.80** |
 
-Key findings:
+Key observations:
 
-* Hit@1 doubled after reranking.
-* Mean Reciprocal Rank improved from 0.60 to 0.80.
-* Queries whose correct document was already present in the candidate set were consistently promoted to the top position.
-* Reranking cannot recover documents that are absent from the initial retrieval candidate set, highlighting the distinction between retrieval recall and ranking precision.
+- Hit@1 doubled after reranking.
+- Mean Reciprocal Rank increased substantially.
+- Relevant documents are promoted to the top of the retrieved context before answer generation.
 
 ---
 
@@ -164,10 +257,20 @@ src/
     retrieve.py
     rerank.py
     ingest.py
+    quiz.py
+    learning.py
+    monitor.py
+    monitor_sources/
+        clinical_trials.py
+        openfda.py
+        ema.py
 
 prompts/
+
 sources/
+
 data/
+
 tests/
 ```
 
@@ -187,28 +290,50 @@ Configure environment variables:
 OPENAI_API_KEY=
 PINECONE_API_KEY=
 COHERE_API_KEY=
+OPENFDA_API_KEY=    # optional
 ```
 
-Run the application:
+Run:
 
 ```bash
-python -m streamlit run src/app.py
+streamlit run src/app.py
+```
+
+---
+
+# Testing
+
+Run the complete test suite:
+
+```bash
+pytest
+```
+
+or execute individual component suites, for example:
+
+```bash
+pytest tests/test_monitor*.py -v
+pytest tests/test_quiz.py -v
+pytest tests/test_learning.py -v
 ```
 
 ---
 
 # Future Work
 
-* Regulatory monitoring using external APIs
-* Learning history visualization
-* Adaptive learning recommendations
-* Retrieval quality dashboard
-* Expanded regulatory corpus
-* Optional hybrid retrieval (semantic + keyword)
-* Production deployment
+Planned improvements include:
+
+- AI-generated Monitor summaries
+- Saved Monitor searches
+- Watchlists and notifications
+- Cost and token usage dashboard
+- Adaptive learning recommendations
+- Learning analytics
+- Hybrid retrieval (semantic + keyword)
+- Production deployment
 
 ---
 
 # Acknowledgements
 
-Developed as a capstone project for the **Ironhack AI Engineering Bootcamp**, demonstrating Retrieval-Augmented Generation, semantic search, neural reranking, structured prompting, evaluation-driven development, and regulatory AI applications in drug development.
+DrugDev-AI was developed as the capstone project for the **Ironhack AI Consulting Bootcamp**. It demonstrates modern AI application design through Retrieval-Augmented Generation, neural reranking, structured prompting, evaluation-driven development, curriculum generation, and live regulatory monitoring in the pharmaceutical domain.

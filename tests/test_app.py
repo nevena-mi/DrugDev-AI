@@ -27,6 +27,7 @@ class FakeStreamlit:
         text_inputs: dict[str, str] | None = None,
         text_areas: dict[str, str] | None = None,
         checkboxes: dict[str, bool] | None = None,
+        pills: dict[str, list[str] | str | None] | None = None,
         buttons: dict[str, bool] | None = None,
         session_state: dict[str, object] | None = None,
     ) -> None:
@@ -34,6 +35,7 @@ class FakeStreamlit:
         self.text_inputs = text_inputs or {}
         self.text_areas = text_areas or {}
         self.checkboxes = checkboxes or {}
+        self.pill_selections = pills or {}
         self.buttons = buttons or {}
         self.session_state = session_state or {}
         self.calls: list[tuple[str, object]] = []
@@ -67,6 +69,24 @@ class FakeStreamlit:
     def checkbox(self, label: str, value: bool = False) -> bool:
         self.calls.append(("checkbox", (label, value)))
         return self.checkboxes.get(label, value)
+
+    def pills(
+        self,
+        label: str,
+        options: list[str],
+        *,
+        selection_mode: str = "single",
+        default: list[str] | str | None = None,
+        key: str | None = None,
+        width: str = "content",
+    ):
+        self.calls.append(("pills", (label, tuple(options), selection_mode, default, key, width)))
+        lookup_key = key if key is not None else label
+        if lookup_key in self.pill_selections:
+            return self.pill_selections[lookup_key]
+        if default is not None:
+            return default
+        return [] if selection_mode == "multi" else None
 
     def button(self, label: str, key: str | None = None) -> bool:
         self.calls.append(("button", (label, key)))
@@ -110,7 +130,19 @@ def test_main_applies_shared_content_width_shell() -> None:
     app_module.main(fake_streamlit, ask_fn=lambda question: SimpleNamespace(answer="ok", citations=[]))
 
     assert any(
-        call[0] == "markdown" and "max-width: 980px" in call[1] and ".block-container" in call[1]
+        call[0] == "markdown"
+        and "max-width: 980px" in call[1]
+        and ".block-container" in call[1]
+        and "--app-accent:" in call[1]
+        and "--app-control-accent:" in call[1]
+        and ".stTabs [data-baseweb=\"tab\"]" in call[1]
+        and "gap: 0.8rem" in call[1]
+        and "border-bottom: 1px solid rgba(71, 85, 105, 0.58)" in call[1]
+        and "background: rgba(30, 41, 59, 0.72)" in call[1]
+        and "color: #000000" in call[1]
+        and "accent-color: var(--app-control-accent)" in call[1]
+        and "button[data-variant=\"pills\"]" in call[1]
+        and "app-title" in call[1]
         for call in fake_streamlit.calls
     )
 
@@ -333,6 +365,59 @@ def test_main_handles_backend_errors_gracefully() -> None:
     assert any(call[0] == "error" and "Unable to answer the question" in call[1] for call in fake_streamlit.calls)
 
 
+def test_main_persists_ask_state_and_preserves_other_modes_across_rerenders() -> None:
+    fake_session = SimpleNamespace(
+        profile=SimpleNamespace(),
+        recommended_start_module_id="foundations",
+        current_module_id="foundations",
+        completed_module_ids=[],
+        quiz_result=None,
+        current_quiz=None,
+        current_lesson=None,
+    )
+    fake_monitor_result = monitor_module.MonitorResult(
+        topic="pharmacovigilance",
+        selected_sources=["EMA"],
+        items=[],
+        source_errors=[],
+    )
+    fake_result = SimpleNamespace(
+        answer="Grounded answer",
+        citations=[SimpleNamespace(document_title="example")],
+    )
+    shared_state: dict[str, object] = {
+        "learning_session": fake_session,
+        "monitor_result": fake_monitor_result,
+        "monitor_source_filter": {"ClinicalTrials.gov": True, "openFDA": True, "EMA": True},
+        "monitor_keyword_filter": "",
+    }
+    ask_calls: list[str] = []
+
+    first_run = FakeStreamlit(
+        question="What is GCP?",
+        buttons={"Ask": True},
+        session_state=shared_state,
+    )
+
+    def tracking_ask(question: str):
+        ask_calls.append(question)
+        return fake_result
+
+    app_module.main(first_run, ask_fn=tracking_ask)
+
+    second_run = FakeStreamlit(session_state=shared_state, buttons={})
+    app_module.main(second_run, ask_fn=lambda question: (_ for _ in ()).throw(AssertionError("Ask backend should not rerun")))
+
+    assert ask_calls == ["What is GCP?"]
+    assert shared_state["ask_last_question"] == "What is GCP?"
+    assert shared_state["ask_last_result"] is fake_result
+    assert shared_state["learning_session"] is fake_session
+    assert shared_state["monitor_result"] is fake_monitor_result
+    assert any(call[0] == "text_input" and call[1][0] == "Your question" and call[1][1] == "What is GCP?" for call in second_run.calls)
+    assert any(call[0] == "write" and call[1] == "Grounded answer" for call in second_run.calls)
+    assert any(call[0] == "markdown" and "**Citation 1**: example" in call[1] for call in second_run.calls)
+
+
 def test_main_renders_monitor_tab_and_calls_orchestrator() -> None:
     fake_monitor_result = app_module.MonitorResult(
         topic="pharmacovigilance",
@@ -369,13 +454,9 @@ def test_main_renders_monitor_tab_and_calls_orchestrator() -> None:
             "Per-source limit": "3",
             "Keyword filter (optional)": "",
         },
-        checkboxes={
-            "ClinicalTrials.gov": True,
-            "openFDA": False,
-            "EMA": True,
-            "Show ClinicalTrials.gov": True,
-            "Show openFDA": False,
-            "Show EMA": True,
+        pills={
+            "monitor_sources_pills": ["ClinicalTrials.gov", "EMA"],
+            "monitor_local_filter_pills": ["ClinicalTrials.gov", "EMA"],
         },
         buttons={"Fetch Updates": True},
     )
@@ -392,6 +473,9 @@ def test_main_renders_monitor_tab_and_calls_orchestrator() -> None:
     assert any(call[0] == "subheader" and call[1] == "Monitor Summary" for call in fake_streamlit.calls)
     assert any(call[0] == "warning" and "openFDA: timeout" in call[1] for call in fake_streamlit.calls)
     assert any(call[0] == "subheader" and call[1] == "Signal Feed" for call in fake_streamlit.calls)
+    assert any(call[0] == "pills" and call[1][0] == "Sources" for call in fake_streamlit.calls)
+    assert any(call[0] == "pills" and call[1][0] == "Local Filters" for call in fake_streamlit.calls)
+    assert not any(call[0] == "checkbox" for call in fake_streamlit.calls)
     assert any(call[0] == "markdown" and "**EMA update**" in call[1] for call in fake_streamlit.calls)
     assert any(call[0] == "markdown" and "monitor-source-badge--ema" in call[1] for call in fake_streamlit.calls)
     assert any(call[0] == "markdown" and "[Official source](https://example.com/ema)" in call[1] for call in fake_streamlit.calls)
@@ -420,6 +504,7 @@ def test_main_uses_session_state_monitor_result_without_refetching() -> None:
             "monitor_result": fake_monitor_result,
             "monitor_source_filter": {"ClinicalTrials.gov": False, "openFDA": False, "EMA": True},
             "monitor_keyword_filter": "",
+            "monitor_selected_sources": ["EMA"],
         },
         text_inputs={
             "Topic or keyword": "topic",
@@ -427,13 +512,9 @@ def test_main_uses_session_state_monitor_result_without_refetching() -> None:
             "Per-source limit": "3",
             "Keyword filter (optional)": "nonmatching",
         },
-        checkboxes={
-            "ClinicalTrials.gov": True,
-            "openFDA": False,
-            "EMA": True,
-            "Show ClinicalTrials.gov": False,
-            "Show openFDA": False,
-            "Show EMA": True,
+        pills={
+            "monitor_sources_pills": ["EMA"],
+            "monitor_local_filter_pills": ["EMA"],
         },
         buttons={"Fetch Updates": False},
     )
@@ -444,6 +525,9 @@ def test_main_uses_session_state_monitor_result_without_refetching() -> None:
     assert fetch_updates.call_count == 0
     assert any(call[0] == "subheader" and call[1] == "Monitor Summary" for call in fake_streamlit.calls)
     assert any(call[0] == "info" and "No signals matched the current local filters." in call[1] for call in fake_streamlit.calls)
+    assert any(call[0] == "pills" and call[1][0] == "Sources" for call in fake_streamlit.calls)
+    assert any(call[0] == "pills" and call[1][0] == "Local Filters" for call in fake_streamlit.calls)
+    assert not any(call[0] == "checkbox" for call in fake_streamlit.calls)
 
 
 def test_monitor_item_card_renders_badge_and_collapsible_description() -> None:

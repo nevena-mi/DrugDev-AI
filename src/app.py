@@ -34,6 +34,12 @@ from src.graph import (
 
 logger = logging.getLogger(__name__)
 
+APP_ACCENT_COLOR = "#0f766e"
+APP_ACCENT_SOFT = "rgba(15, 118, 110, 0.16)"
+APP_ACCENT_BORDER = "rgba(15, 118, 110, 0.38)"
+APP_CONTROL_ACCENT_COLOR = "#2dd4bf"
+APP_CONTENT_WIDTH_PX = 980
+
 
 class StreamlitLike(Protocol):
     """Minimal Streamlit surface used by the application."""
@@ -48,6 +54,16 @@ class StreamlitLike(Protocol):
     def text_input(self, label: str, value: str = "", placeholder: str = "") -> str: ...
     def text_area(self, label: str, value: str = "", placeholder: str = "") -> str: ...
     def checkbox(self, label: str, value: bool = False) -> bool: ...
+    def pills(
+        self,
+        label: str,
+        options: list[str],
+        *,
+        selection_mode: str = "single",
+        default: list[str] | str | None = None,
+        key: str | None = None,
+        width: str = "content",
+    ) -> list[str] | str | None: ...
     def button(self, label: str, key: str | None = None) -> bool: ...
     def error(self, text: str) -> None: ...
     def success(self, text: str) -> None: ...
@@ -89,11 +105,117 @@ def _apply_app_layout(st: StreamlitLike) -> None:
     st.markdown(
         """
         <style>
+            :root {
+                --app-accent: %s;
+                --app-accent-soft: %s;
+                --app-accent-border: %s;
+                --app-control-accent: %s;
+            }
+
             .block-container {
-                max-width: 980px;
+                max-width: %dpx;
                 margin: 0 auto;
                 padding-left: 1rem;
                 padding-right: 1rem;
+            }
+
+            .app-title-block {
+                margin: 0 0 1rem 0;
+            }
+
+            .app-title-kicker {
+                color: var(--app-accent);
+                font-size: 0.82rem;
+                font-weight: 700;
+                letter-spacing: 0.08em;
+                text-transform: uppercase;
+                margin-bottom: 0.2rem;
+            }
+
+            .app-title {
+                margin: 0;
+                font-size: clamp(2rem, 4vw, 3rem);
+                line-height: 1.05;
+                font-weight: 800;
+                letter-spacing: -0.03em;
+                color: #f8fafc;
+            }
+
+            .app-title span {
+                color: var(--app-accent);
+            }
+
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 0.8rem;
+                border-bottom: 1px solid rgba(71, 85, 105, 0.58);
+                padding-bottom: 0.2rem;
+            }
+
+            .stTabs [data-baseweb="tab"],
+            .stTabs [role="tab"] {
+                font-size: 1.02rem;
+                border-radius: 0.9rem 0.9rem 0 0;
+                border: 1px solid rgba(148, 163, 184, 0.36);
+                border-bottom: none;
+                background: rgba(30, 41, 59, 0.72);
+                color: rgba(226, 232, 240, 0.90);
+                padding: 0.55rem 1rem;
+                transition: border-color 160ms ease, background-color 160ms ease, color 160ms ease;
+            }
+
+            .stTabs [data-baseweb="tab"]:hover,
+            .stTabs [role="tab"]:hover {
+                border-color: var(--app-accent-border);
+                background: rgba(30, 41, 59, 0.86);
+            }
+
+            .stTabs [data-baseweb="tab"][aria-selected="true"],
+            .stTabs [role="tab"][aria-selected="true"] {
+                border-color: var(--app-accent);
+                background: var(--app-accent-soft);
+                color: #000000;
+                box-shadow: inset 0 -2px 0 0 var(--app-accent);
+            }
+
+            div[data-testid="stCheckbox"] input[type="checkbox"] {
+                accent-color: var(--app-control-accent) !important;
+            }
+
+            div[data-testid="stButtonGroup"] {
+                gap: 0.35rem;
+            }
+
+            div[data-testid="stButtonGroup"] button[data-variant="pills"] {
+                border-radius: 999px;
+                border: 1px solid rgba(148, 163, 184, 0.36);
+                background: rgba(39, 46, 59, 0.92);
+                color: rgba(226, 232, 240, 0.94);
+                padding: 0.28rem 0.8rem;
+                min-height: 0;
+                line-height: 1.2;
+                box-shadow: none;
+            }
+
+            div[data-testid="stButtonGroup"] button[data-variant="pills"]:is(:hover, :focus-visible):not([data-selected="true"]) {
+                border-color: var(--app-accent-border);
+                background: rgba(51, 65, 85, 0.95);
+            }
+
+            div[data-testid="stButtonGroup"] button[data-variant="pills"][data-selected="true"] {
+                background: var(--app-accent-soft);
+                border-color: var(--app-accent);
+                color: #000000;
+            }
+
+            div[data-testid="stButtonGroup"] button[data-variant="pills"][data-selected="true"]:is(:hover, :focus-visible) {
+                background: rgba(15, 118, 110, 0.22);
+                border-color: var(--app-accent);
+                color: #000000;
+            }
+
+            button[kind="primary"],
+            button[kind="secondary"] {
+                border-color: var(--app-accent-border);
             }
 
             .monitor-item-meta {
@@ -136,7 +258,14 @@ def _apply_app_layout(st: StreamlitLike) -> None:
                 margin-top: 0.25rem;
             }
         </style>
-        """,
+        """
+        % (
+            APP_ACCENT_COLOR,
+            APP_ACCENT_SOFT,
+            APP_ACCENT_BORDER,
+            APP_CONTROL_ACCENT_COLOR,
+            APP_CONTENT_WIDTH_PX,
+        ),
         unsafe_allow_html=True,
     )
 
@@ -286,6 +415,38 @@ def _render_monitor_item_card(st: StreamlitLike, item: Any) -> None:
     st.markdown("")
 
 
+def _normalize_monitor_pill_selection(selection: Any, options: list[str]) -> list[str]:
+    """Normalize a Streamlit pill multi-selection into option-order output."""
+
+    if selection is None:
+        return []
+    if isinstance(selection, str):
+        chosen = {selection}
+    else:
+        chosen = set(selection)
+    return [option for option in options if option in chosen]
+
+
+def _render_monitor_pills(
+    st: StreamlitLike,
+    label: str,
+    options: list[str],
+    *,
+    default_selected: list[str],
+    key: str,
+) -> list[str]:
+    """Render compact multi-select pills and return the ordered selection."""
+
+    selection = st.pills(
+        label,
+        options,
+        selection_mode="multi",
+        default=default_selected,
+        key=key,
+    )
+    return _normalize_monitor_pill_selection(selection, options)
+
+
 def _render_answer_block(st: StreamlitLike, heading: str, answer: LearningAnswer | None) -> None:
     """Render a grounded answer with citations."""
 
@@ -294,7 +455,7 @@ def _render_answer_block(st: StreamlitLike, heading: str, answer: LearningAnswer
 
     st.subheader(heading)
     st.write(answer.answer)
-    if answer.retrieval_scope == "fallback":
+    if getattr(answer, "retrieval_scope", None) == "fallback":
         st.info("Used a broader retrieval fallback because the module documents did not yield context.")
     _render_citation_block(st, list(answer.citations))
 
@@ -314,6 +475,8 @@ def _to_mapping(value: Any) -> dict[str, Any]:
 def _render_ask_tab(st: StreamlitLike, ask_fn=ask_question) -> None:
     """Render the functional Ask tab."""
 
+    state = _get_session_state(st)
+
     st.title("Ask")
     st.markdown(
         "Ask a natural-language question and receive an answer grounded in the indexed regulatory documents."
@@ -321,27 +484,26 @@ def _render_ask_tab(st: StreamlitLike, ask_fn=ask_question) -> None:
 
     question = st.text_input(
         "Your question",
-        value="",
+        value=state.get("ask_last_question", ""),
         placeholder="e.g. What is Good Clinical Practice?",
     )
+    state["ask_last_question"] = question
 
-    if not st.button("Ask"):
-        return
+    if st.button("Ask"):
+        if not question.strip():
+            st.warning("Enter a question before pressing Ask.")
+        else:
+            try:
+                result = ask_fn(question.strip())
+            except Exception as exc:  # pragma: no cover - exercised in manual runtime
+                logger.exception("Ask pipeline failed")
+                state.pop("ask_last_result", None)
+                st.error(f"Unable to answer the question: {exc}")
+            else:
+                state["ask_last_question"] = question.strip()
+                state["ask_last_result"] = result
 
-    if not question.strip():
-        st.warning("Enter a question before pressing Ask.")
-        return
-
-    try:
-        result = ask_fn(question.strip())
-    except Exception as exc:  # pragma: no cover - exercised in manual runtime
-        logger.exception("Ask pipeline failed")
-        st.error(f"Unable to answer the question: {exc}")
-        return
-
-    st.subheader("Answer")
-    st.write(result.answer)
-    _render_citation_block(st, list(result.citations))
+    _render_answer_block(st, "Answer", state.get("ask_last_result"))
 
 
 def _parse_monitor_date(value: str) -> date | None:
@@ -419,12 +581,16 @@ def _render_monitor_tab(st: StreamlitLike) -> None:
 
     st.subheader("Sources")
     source_options = ["ClinicalTrials.gov", "openFDA", "EMA"]
-    source_selection = {
-        source_name: st.checkbox(source_name, value=state.get(f"monitor_source_{source_name}", True))
-        for source_name in source_options
-    }
-    for source_name, enabled in source_selection.items():
-        state[f"monitor_source_{source_name}"] = enabled
+    source_selection = _render_monitor_pills(
+        st,
+        "Sources",
+        source_options,
+        default_selected=state.get("monitor_selected_sources", source_options),
+        key="monitor_sources_pills",
+    )
+    state["monitor_selected_sources"] = source_selection
+    for source_name in source_options:
+        state[f"monitor_source_{source_name}"] = source_name in source_selection
 
     published_after_text = st.text_input(
         "Published after (YYYY-MM-DD, optional)",
@@ -441,7 +607,7 @@ def _render_monitor_tab(st: StreamlitLike) -> None:
     state["monitor_per_source_limit"] = per_source_limit_text
 
     if st.button("Fetch Updates"):
-        selected_sources = [source_name for source_name, enabled in source_selection.items() if enabled]
+        selected_sources = list(source_selection)
         if not topic.strip():
             st.warning("Enter a topic before fetching updates.")
         elif not selected_sources:
@@ -480,15 +646,16 @@ def _render_monitor_tab(st: StreamlitLike) -> None:
     _render_monitor_summary(st, result)
 
     st.subheader("Local Filters")
-    filter_state = state.setdefault(
-        "monitor_source_filter",
-        {source_name: True for source_name in source_options},
+    filter_state = state.setdefault("monitor_source_filter", {source_name: True for source_name in source_options})
+    local_selected_sources = _render_monitor_pills(
+        st,
+        "Local Filters",
+        source_options,
+        default_selected=[source_name for source_name in source_options if filter_state.get(source_name, True)],
+        key="monitor_local_filter_pills",
     )
-    for source_name in source_options:
-        filter_state[source_name] = st.checkbox(
-            f"Show {source_name}",
-            value=filter_state.get(source_name, True),
-        )
+    filter_state = {source_name: source_name in local_selected_sources for source_name in source_options}
+    state["monitor_source_filter"] = filter_state
 
     keyword_filter = st.text_input(
         "Keyword filter (optional)",
@@ -773,7 +940,15 @@ def main(st: StreamlitLike | None = None, *, ask_fn=ask_question) -> None:
     ui.set_page_config(page_title="DrugDev AI", page_icon="📚", layout="wide")
     _apply_app_layout(ui)
 
-    ui.title("DrugDev AI")
+    ui.markdown(
+        """
+        <div class="app-title-block">
+            <div class="app-title-kicker">Ask / Learn / Monitor</div>
+            <h1 class="app-title">DrugDev <span>AI</span></h1>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     ui.markdown("A regulatory science assistant for grounded Ask-mode question answering.")
 
     ask_tab, learn_tab, monitor_tab = ui.tabs(["Ask", "Learn", "Monitor"])
