@@ -14,6 +14,7 @@ from src.config import CHAT_MODEL
 from src.curriculum import CurriculumModule
 from src.openai_client import client
 from src.retrieve import RetrievedChunk
+from src.costs import record_openai_response
 
 
 logger = logging.getLogger(__name__)
@@ -325,6 +326,18 @@ def generate_quiz(
 
     try:
         response = client.responses.create(model=CHAT_MODEL, input=prompt)
+
+        try:
+            record_openai_response(
+                response,
+                phase="runtime",
+                mode="learn",
+                operation="quiz_generation",
+                model=CHAT_MODEL,
+            )
+        except Exception:
+            logger.exception("Failed to record quiz-generation cost analytics")
+
     except Exception as exc:  # pragma: no cover - exercised via failure tests
         logger.exception("Quiz generation failed")
         raise QuizGenerationError("Failed to generate a curriculum quiz") from exc
@@ -427,6 +440,18 @@ def evaluate_quiz(
             input=prompt,
             text={"format": _quiz_evaluation_response_format()},
         )
+
+        try:
+            record_openai_response(
+                response,
+                phase="runtime",
+                mode="learn",
+                operation="quiz_evaluation",
+                model=CHAT_MODEL,
+            )
+        except Exception:
+            logger.exception("Failed to record quiz-evaluation cost analytics")
+
     except Exception as exc:  # pragma: no cover - exercised via failure tests
         logger.exception("Quiz evaluation failed")
         raise QuizEvaluationError("Failed to evaluate the quiz") from exc

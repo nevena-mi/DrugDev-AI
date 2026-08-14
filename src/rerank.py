@@ -10,6 +10,7 @@ import cohere
 
 from src.config import COHERE_API_KEY, COHERE_RERANK_MODEL
 from src.retrieve import RetrievedChunk
+from src.costs import record_cohere_rerank
 
 
 logger = logging.getLogger(__name__)
@@ -76,6 +77,7 @@ def rerank_chunks(
     top_n: int | None = None,
     model: str | None = None,
     client: CohereRerankClient | None = None,
+    cost_mode: str = "unknown",
 ) -> list[RerankedChunk]:
     """Rerank candidate chunks using Cohere and preserve the original payload."""
 
@@ -102,6 +104,19 @@ def rerank_chunks(
             documents=documents,
             top_n=rerank_top_n,
         )
+
+        # Cost analytics must never interfere with reranking.
+        try:
+            record_cohere_rerank(
+                response,
+                phase="runtime",
+                mode=cost_mode,
+                operation="rerank",
+                model=rerank_model,
+            )
+        except Exception:
+            logger.exception("Failed to record Cohere cost analytics")
+            
     except (
         cohere.UnauthorizedError,
         cohere.ForbiddenError,

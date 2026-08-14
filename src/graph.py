@@ -16,6 +16,7 @@ from src.curriculum import (
     get_module,
     next_modules as curriculum_next_modules,
 )
+from src.costs import record_openai_response
 from src.openai_client import client
 from src.rerank import RerankedChunk, RerankingError, rerank_chunks
 from src.quiz import GeneratedQuiz, QuizEvaluation, evaluate_quiz, generate_quiz
@@ -92,6 +93,7 @@ class AskState:
     namespace: str | None = None
     document_paths: list[str] | None = None
     allow_fallback: bool = False
+    cost_mode: str = "ask"
     retrieved_chunks: list[RetrievedChunk] = field(default_factory=list)
     context: str = ""
     llm_output: str = ""
@@ -236,10 +238,10 @@ def _reranked_to_retrieved_chunk(chunk: RerankedChunk) -> RetrievedChunk:
     )
 
 
-def _select_ask_chunks(question: str, *, namespace: str | None = None) -> tuple[list[RetrievedChunk], str]:
+def _select_ask_chunks(question: str, *, namespace: str | None = None, cost_mode: str = "ask",) -> tuple[list[RetrievedChunk], str]:
     """Retrieve Ask-mode candidates and rerank them when possible."""
 
-    pinecone_chunks = retrieve_chunks(question, top_k=ASK_RETRIEVAL_CANDIDATE_TOP_K, namespace=namespace)
+    pinecone_chunks = retrieve_chunks(question, top_k=ASK_RETRIEVAL_CANDIDATE_TOP_K, namespace=namespace, cost_mode=cost_mode,)
     if not pinecone_chunks:
         return [], "corpus"
 
@@ -248,6 +250,7 @@ def _select_ask_chunks(question: str, *, namespace: str | None = None) -> tuple[
             question,
             pinecone_chunks,
             top_n=min(ASK_FINAL_TOP_K, len(pinecone_chunks)),
+            cost_mode=cost_mode,
         )
     except RerankingError:
         logger.exception(
@@ -281,6 +284,7 @@ def _rerank_candidate_chunks(
             question,
             candidate_chunks,
             top_n=min(final_top_k, len(candidate_chunks)),
+            cost_mode="learn",
         )
     except RerankingError:
         logger.exception(
@@ -348,7 +352,7 @@ def _retrieve_grounded_chunks(
     """Retrieve chunks with optional strict document scoping."""
 
     if document_paths is None:
-        chunks = retrieve_chunks(question, top_k=top_k, namespace=namespace)
+        chunks = retrieve_chunks(question, top_k=top_k, namespace=namespace, cost_mode="learn",)
         return _rerank_candidate_chunks(question, chunks, scope="corpus")
 
     strict_chunks = retrieve_chunks(
@@ -356,6 +360,7 @@ def _retrieve_grounded_chunks(
         top_k=top_k,
         namespace=namespace,
         document_paths=document_paths,
+        cost_mode="learn",
     )
     if strict_chunks:
         return _rerank_candidate_chunks(question, strict_chunks, scope="module")
@@ -365,7 +370,7 @@ def _retrieve_grounded_chunks(
             "Strict module retrieval returned no usable context for %r; falling back to broad retrieval",
             question,
         )
-        fallback_chunks = retrieve_chunks(question, top_k=top_k, namespace=namespace)
+        fallback_chunks = retrieve_chunks(question, top_k=top_k, namespace=namespace, cost_mode="learn",)
         return _rerank_candidate_chunks(question, fallback_chunks, scope="fallback")
 
     return [], "module"
@@ -378,6 +383,7 @@ def _generate_answer_state(
     namespace: str | None = None,
     document_paths: Sequence[str] | None = None,
     allow_fallback: bool = False,
+    cost_mode: str = "ask",
 ) -> AskState:
     """Retrieve context, generate an answer, and attach citations."""
 
@@ -387,11 +393,13 @@ def _generate_answer_state(
         namespace=namespace,
         document_paths=list(document_paths) if document_paths is not None else None,
         allow_fallback=allow_fallback,
+        cost_mode=cost_mode,
     )
     if document_paths is None:
         state.retrieved_chunks, state.retrieval_scope = _select_ask_chunks(
             question,
             namespace=namespace,
+            cost_mode=cost_mode,
         )
     else:
         state.retrieved_chunks, state.retrieval_scope = _retrieve_grounded_chunks(
@@ -517,6 +525,21 @@ def recommend_starting_module_id(
 
     try:
         response = client.responses.create(model=CHAT_MODEL, input=prompt)
+
+        try:
+            record_openai_response(
+                response,
+                phase="runtime",
+                mode="learn",
+                operation="starting_module_recommendation",
+                model=CHAT_MODEL,
+            )
+        except Exception:
+            logger.exception(
+                "Failed to record starting-module cost analytics"
+            )
+
+
     except Exception as exc:  # pragma: no cover - exercised in failure tests
         logger.exception("Starting-module recommendation failed")
         return allowed_modules[0].id
@@ -565,6 +588,7 @@ def answer_learning_question(
         namespace=namespace,
         document_paths=module.documents,
         allow_fallback=True,
+        cost_mode="learn",
     )
     return LearningAnswer(
         module_id=module.id,
@@ -641,6 +665,19 @@ def generate_learning_lesson(
             input=prompt,
             text={"format": _lesson_response_format()},
         )
+
+        try:
+            record_openai_response(
+                response,
+                phase="runtime",
+                mode="learn",
+                operation="lesson_generation",
+                model=CHAT_MODEL,
+            )
+        except Exception:
+            logger.exception("Failed to record lesson-generation cost analytics")
+
+
     except Exception as exc:  # pragma: no cover - exercised via failure tests
         logger.exception("Lesson generation failed")
         raise LessonGenerationError("Failed to generate a grounded lesson") from exc
@@ -805,6 +842,22 @@ def _generate(state: AskState) -> AskState:
             model=CHAT_MODEL,
             input=prompt,
         )
+
+        try:
+            record_openai_response(
+                response,
+                phase="runtime",
+                mode=state.cost_mode,
+                operation=(
+                    "ask_answer_generation"
+                    if state.cost_mode == "ask"
+                    else "learning_question_answer"
+                ),
+                model=CHAT_MODEL,
+            )
+        except Exception:
+            logger.exception("Failed to record answer-generation cost analytics")
+
     except Exception as exc:  # pragma: no cover - exercised via failure test
         logger.exception("Answer generation failed")
         raise RAGGenerationError("Failed to generate a grounded answer") from exc

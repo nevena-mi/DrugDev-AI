@@ -13,6 +13,7 @@ from typing import Any, Protocol, Sequence
 
 from src.config import EMBEDDING_MODEL
 from src.openai_client import client
+from src.costs import record_openai_embedding
 
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,13 @@ class EmbeddingGenerationError(RuntimeError):
     """Raised when embedding generation fails."""
 
 
-def _embed_texts(texts: Sequence[str]) -> list[list[float]]:
+def _embed_texts(
+    texts: Sequence[str],
+    *,
+    phase: str,
+    mode: str,
+    operation: str,
+) -> list[list[float]]:
     """Embed one or more texts using the configured OpenAI model."""
 
     if not texts:
@@ -52,6 +59,18 @@ def _embed_texts(texts: Sequence[str]) -> list[list[float]]:
     except Exception as exc:  # pragma: no cover - exercised via failure test
         logger.exception("Embedding generation failed")
         raise EmbeddingGenerationError("Failed to generate embeddings") from exc
+
+    # Cost analytics must never break the functional embedding workflow.
+    try:
+        record_openai_embedding(
+            response,
+            phase=phase,
+            mode=mode,
+            operation=operation,
+            model=EMBEDDING_MODEL,
+        )
+    except Exception:
+        logger.exception("Failed to record embedding cost analytics")
 
     if len(response.data) != len(texts):  # pragma: no cover - defensive guard
         raise EmbeddingGenerationError("Embedding API returned a mismatched number of vectors")
@@ -90,7 +109,10 @@ def generate_embeddings(
             EMBEDDING_MODEL,
         )
 
-        embeddings = _embed_texts(batch_texts)
+        embeddings = _embed_texts(batch_texts,
+            phase="build",
+            mode="ingestion",
+            operation="knowledge_base_embedding",)
         for document, embedding in zip(batch, embeddings, strict=True):
             embedded_chunks.append(
                 EmbeddedChunk(
@@ -104,12 +126,12 @@ def generate_embeddings(
     return embedded_chunks
 
 
-def embed_query(query: str) -> list[float]:
+def embed_query(query: str, *, mode: str = "unknown",) -> list[float]:
     """Generate a single embedding vector for a retrieval query."""
 
     cleaned_query = query.strip()
     if not cleaned_query:
         raise EmbeddingGenerationError("Query text must not be empty")
 
-    embeddings = _embed_texts([cleaned_query])
+    embeddings = _embed_texts([cleaned_query], phase="runtime", mode=mode, operation="query_embedding",)
     return embeddings[0]

@@ -38,11 +38,12 @@ def retrieve_chunks(
     top_k: int = 5,
     namespace: str | None = None,
     document_paths: Sequence[str] | None = None,
+    cost_mode: str = "unknown",
 ) -> list[RetrievedChunk]:
     """Embed a natural-language query and return the most relevant chunks."""
 
     logger.info("Retrieving chunks for query %r", query)
-    vector = embed_query(query)
+    vector = embed_query(query, mode=cost_mode)
     metadata_filter = None
     if document_paths is not None:
         filtered_paths = [path for path in document_paths if path]

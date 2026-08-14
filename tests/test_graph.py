@@ -61,7 +61,7 @@ def test_retrieval_occurs_before_reranking_and_context_uses_reranked_top_five() 
         for position, index in enumerate([3, 1, 0, 2, 4], start=0)
     ]
 
-    def fake_retrieve_chunks(query: str, *, top_k: int, namespace=None, document_paths=None):
+    def fake_retrieve_chunks(query: str, *, top_k: int, namespace=None, document_paths=None, cost_mode="unknown",):
         order.append("retrieve")
         assert query == "What is GCP?"
         assert top_k == 15
@@ -69,7 +69,7 @@ def test_retrieval_occurs_before_reranking_and_context_uses_reranked_top_five() 
         assert document_paths is None
         return pinecone_chunks
 
-    def fake_rerank_chunks(query: str, candidates, *, top_n: int, model=None, client=None):
+    def fake_rerank_chunks(query: str, candidates, *, top_n: int, model=None, client=None, cost_mode="unknown",):
         order.append("rerank")
         assert query == "What is GCP?"
         assert candidates == pinecone_chunks
@@ -129,7 +129,7 @@ def test_reranking_failure_falls_back_to_pinecone_top_five() -> None:
     order: list[str] = []
     captured_prompt: dict[str, str] = {}
 
-    def fake_retrieve_chunks(query: str, *, top_k: int, namespace=None, document_paths=None):
+    def fake_retrieve_chunks(query: str, *, top_k: int, namespace=None, document_paths=None, cost_mode="unknown",):
         order.append("retrieve")
         assert top_k == 15
         return pinecone_chunks
@@ -161,7 +161,7 @@ def test_reranking_failure_falls_back_to_pinecone_top_five() -> None:
 def test_llm_failures_are_wrapped_clearly() -> None:
     pinecone_chunks = [_make_chunk()]
 
-    def fake_retrieve_chunks(query: str, *, top_k: int, namespace=None, document_paths=None):
+    def fake_retrieve_chunks(query: str, *, top_k: int, namespace=None, document_paths=None, cost_mode="unknown"):
         return pinecone_chunks
 
     def fake_rerank_chunks(*args, **kwargs):
